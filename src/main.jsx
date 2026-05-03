@@ -19,9 +19,20 @@ const packages = [
 ];
 
 const addons = [
-  { id: 'tire', name: 'Tire Shine', price: 10 },
-  { id: 'pet', name: 'Pet Hair Removal', price: 20 },
-  { id: 'odor', name: 'Odor Treatment', price: 15 }
+  { id: 'pet-hair-removal', name: 'Pet Hair Removal', minimumPrice: 15, priceLabel: 'Starting at $15' },
+  { id: 'extra-vacuuming', name: 'Extra Vacuuming', minimumPrice: 20, priceLabel: '$20' },
+  { id: 'water-spot-removal', name: 'Water Spot Removal', minimumPrice: 30, priceLabel: 'Starting at $30' },
+  { id: 'exterior-plastic-protection', name: 'Exterior Plastic Protection', minimumPrice: 10, priceLabel: '$10' },
+  { id: 'headlight-restoration', name: 'Headlight Restoration', minimumPrice: 30, priceLabel: '$30' },
+  { id: 'hand-wax', name: 'Hand Wax', minimumPrice: 35, priceLabel: 'Starting at $35' },
+  { id: 'tree-sap-removal', name: 'Tree Sap Removal', minimumPrice: 10, priceLabel: 'Starting at $10' },
+  { id: 'plastic-mat-wash', name: 'Plastic Mat Wash', minimumPrice: 10, priceLabel: '$10' },
+  { id: 'carpet-mat-cleaning', name: 'Carpet Mat Cleaning', minimumPrice: 20, priceLabel: '$20' },
+  { id: 'engine-wash', name: 'Engine Wash', minimumPrice: 85, priceLabel: '$85' },
+  { id: 'rim-detail', name: 'Rim Detail', minimumPrice: 10, priceLabel: '$10 each' },
+  { id: 'roof-cleaning', name: 'Roof Cleaning', minimumPrice: 25, priceLabel: 'Starting at $25' },
+  { id: 'carpet-cleaning', name: 'Carpet Cleaning', minimumPrice: 49, priceLabel: 'Starting at $49' },
+  { id: 'overspray-removal', name: 'Overspray Removal', minimumPrice: 0, priceLabel: 'Price based on vehicle condition' }
 ];
 
 const steps = ['Vehicle', 'Location', 'Date & Time', 'Package', 'Add-ons', 'Summary', 'Deposit'];
@@ -86,8 +97,9 @@ function CustomerBookingFlow() {
   const selectedVehicle = vehicles.find((v) => v.id === booking.vehicleId);
   const selectedPackage = packages.find((p) => p.id === booking.packageId);
   const selectedAddons = addons.filter((a) => booking.addonIds.includes(a.id));
+  const addonsTotal = selectedAddons.reduce((sum, addon) => sum + addon.minimumPrice, 0);
 
-  const subtotal = (selectedVehicle?.price || 0) + (selectedPackage?.price || 0) + selectedAddons.reduce((s, a) => s + a.price, 0);
+  const subtotal = (selectedVehicle?.price || 0) + (selectedPackage?.price || 0) + addonsTotal;
   const deposit = 20;
   const dueToday = Math.min(deposit, subtotal);
   const remaining = Math.max(0, subtotal - dueToday);
@@ -187,7 +199,7 @@ function CustomerBookingFlow() {
             <div className="grid">{addons.map((addon) => (
               <button key={addon.id} className={`choice ${booking.addonIds.includes(addon.id) ? 'selected' : ''}`} onClick={() => toggleAddon(addon.id)}>
                 <strong>{addon.name}</strong>
-                <span>${addon.price}</span>
+                <span>{addon.priceLabel}</span>
               </button>
             ))}</div>
           </div>
@@ -201,7 +213,8 @@ function CustomerBookingFlow() {
               <li>Address: {formattedAddress || '-'}</li>
               <li>Date: {booking.date || '-'} at {booking.time || '-'}</li>
               <li>Package: {selectedPackage ? `${selectedPackage.name} ($${selectedPackage.price})` : '-'}</li>
-              <li>Add-ons: {selectedAddons.length ? selectedAddons.map((a) => `${a.name} ($${a.price})`).join(', ') : 'None'}</li>
+              <li>Add-ons: {selectedAddons.length ? selectedAddons.map((a) => `${a.name} (${a.priceLabel})`).join(', ') : 'None'}</li>
+              <li>Add-ons minimum total: ${addonsTotal}</li>
               <li><strong>Total: ${subtotal}</strong></li>
             </ul>
           </div>
