@@ -58,6 +58,9 @@ function AppShell({ title, children }) { return (<div className="app"><header><h
 function CustomerBookingFlow() {
   const { booking, setBooking } = useBooking();
   const [stepIndex, setStepIndex] = useState(0);
+  const [tipMode, setTipMode] = useState('none');
+  const [customTipInput, setCustomTipInput] = useState('');
+  const [paymentComplete, setPaymentComplete] = useState(false);
   const selectedVehicle = vehicles.find((v) => v.id === booking.vehicleId);
   const selectedPackage = packages.find((p) => p.id === booking.packageId);
   const selectedAddons = addons.filter((a) => booking.addonIds.includes(a.id));
@@ -65,7 +68,13 @@ function CustomerBookingFlow() {
   const addonsTotal = selectedAddons.reduce((sum, addon) => sum + addon.minimumPrice, 0);
   const serviceTotal = packagePrice + addonsTotal;
   const platformFee = serviceTotal * PLATFORM_FEE_RATE;
-  const tip = 0;
+  const customTipValue = Number.parseFloat(customTipInput);
+  const presetTipRates = { '10': 0.1, '15': 0.15, '20': 0.2 };
+  const tip = tipMode in presetTipRates
+    ? serviceTotal * presetTipRates[tipMode]
+    : tipMode === 'custom' && Number.isFinite(customTipValue) && customTipValue > 0
+      ? customTipValue
+      : 0;
   const grandTotal = serviceTotal + platformFee + tip;
   const deposit = 20;
   const dueToday = Math.min(deposit, grandTotal);
@@ -74,6 +83,10 @@ function CustomerBookingFlow() {
   const formattedAddress = [booking.location.streetAddress, booking.location.aptUnit, `${booking.location.city}${booking.location.city && booking.location.state ? ', ' : ''}${booking.location.state} ${booking.location.zipCode}`.trim()].filter(Boolean).join(', ');
   const canProceed = [Boolean(booking.vehicleId), Boolean(booking.location.streetAddress.trim() && booking.location.city.trim() && booking.location.state.trim() && booking.location.zipCode.trim()), Boolean(booking.date && booking.time), Boolean(booking.packageId), true, serviceTotal > 0, true];
   const toggleAddon = (id) => setBooking((prev) => ({ ...prev, addonIds: prev.addonIds.includes(id) ? prev.addonIds.filter((addonId) => addonId !== id) : [...prev.addonIds, id] }));
+  const selectTipMode = (mode) => {
+    setTipMode(mode);
+    if (mode !== 'custom') setCustomTipInput('');
+  };
 
   return (<AppShell title="Customer Booking"><div className="progress">{steps.map((step, i) => <span key={step} className={i <= stepIndex ? 'on' : ''}>{i + 1}. {step}</span>)}</div><section className="card">
     {stepIndex === 0 && <div><h3>Select vehicle</h3><div className="grid">{vehicles.map((vehicle) => <button key={vehicle.id} className={`choice ${booking.vehicleId === vehicle.id ? 'selected' : ''}`} onClick={() => setBooking((prev) => ({ ...prev, vehicleId: vehicle.id }))}><strong>{vehicle.name}</strong><span>{vehicle.category}</span></button>)}</div></div>}
@@ -81,8 +94,9 @@ function CustomerBookingFlow() {
     {stepIndex === 2 && <div className="row"><div><h3>Select date</h3><input type="date" value={booking.date} onChange={(e) => setBooking((prev) => ({ ...prev, date: e.target.value }))} /></div><div><h3>Select time</h3><input type="time" value={booking.time} onChange={(e) => setBooking((prev) => ({ ...prev, time: e.target.value }))} /></div></div>}
     {stepIndex === 3 && <div><h3>Select package</h3><div className="grid">{packages.map((pkg) => <button key={pkg.id} className={`choice ${booking.packageId === pkg.id ? 'selected' : ''}`} onClick={() => setBooking((prev) => ({ ...prev, packageId: pkg.id }))}><strong>{pkg.name}</strong><span>{pkg.description}</span><span>{selectedVehicle ? `$${formatMoney(getPackagePrice(pkg, selectedVehicle))}` : 'Select vehicle to view price'}</span></button>)}</div></div>}
     {stepIndex === 4 && <div><h3>Select add-ons</h3><div className="grid">{addons.map((addon) => <button key={addon.id} className={`choice ${booking.addonIds.includes(addon.id) ? 'selected' : ''}`} onClick={() => toggleAddon(addon.id)}><strong>{addon.name}</strong><span>{addon.priceLabel}</span></button>)}</div></div>}
-    {stepIndex === 5 && <div><h3>Booking summary</h3><ul className="summary"><li>Vehicle: {selectedVehicle ? selectedVehicle.name : '-'}</li><li>Address: {formattedAddress || '-'}</li><li>Date: {booking.date || '-'} at {booking.time || '-'}</li><li>Package: {selectedPackage ? `${selectedPackage.name} ($${formatMoney(packagePrice)})` : '-'}</li><li>Add-ons: {selectedAddons.length ? selectedAddons.map((a) => `${a.name} (${a.priceLabel})`).join(', ') : 'None'}</li><li>Add-ons minimum total: ${formatMoney(addonsTotal)}</li><li>Service total: ${formatMoney(serviceTotal)}</li><li>Platform fee: ${formatMoney(platformFee)}</li><li>Tip: $0.00</li><li><strong>Total: ${formatMoney(grandTotal)}</strong></li></ul></div>}
-    {stepIndex === 6 && <div><h3>Deposit</h3><p>Service address: {formattedAddress || '-'}</p><p>Service total: ${formatMoney(serviceTotal)}</p><p>Platform fee: ${formatMoney(platformFee)}</p><p>Tip: $0.00</p><p>Total: ${formatMoney(grandTotal)}</p><p>Deposit due now: ${formatMoney(dueToday)}</p><p>Remaining balance at completion: ${formatMoney(remaining)}</p><p className="meta">Backend payload address: {formattedAddress || '-'}</p></div>}
+    {stepIndex === 5 && <div><h3>Booking summary</h3><ul className="summary"><li>Vehicle: {selectedVehicle ? selectedVehicle.name : '-'}</li><li>Address: {formattedAddress || '-'}</li><li>Date: {booking.date || '-'} at {booking.time || '-'}</li><li>Package: {selectedPackage ? `${selectedPackage.name} ($${formatMoney(packagePrice)})` : '-'}</li><li>Add-ons: {selectedAddons.length ? selectedAddons.map((a) => `${a.name} (${a.priceLabel})`).join(', ') : 'None'}</li><li>Add-ons minimum total: ${formatMoney(addonsTotal)}</li><li>Service total: ${formatMoney(serviceTotal)}</li><li>Platform fee: ${formatMoney(platformFee)}</li><li>Tip (100% to provider): ${formatMoney(tip)}</li><li><strong>Total: ${formatMoney(grandTotal)}</strong></li></ul><div className="tip-section"><h4>Add a tip</h4><p className="meta">Tip goes 100% to your provider and is excluded from platform fee.</p><div className="tip-buttons">{['10', '15', '20'].map((rate) => <button key={rate} type="button" className={`choice ${tipMode === rate ? 'selected' : ''}`} onClick={() => selectTipMode(rate)}>{rate}%</button>)}<button type="button" className={`choice ${tipMode === 'custom' ? 'selected' : ''}`} onClick={() => selectTipMode('custom')}>Custom</button></div>{tipMode === 'custom' && <div className="custom-tip"><label htmlFor="customTip">Custom tip amount</label><input id="customTip" type="number" min="0" step="0.01" placeholder="0.00" value={customTipInput} onChange={(e) => setCustomTipInput(e.target.value)} /></div>}<p className="tip-total">Updated total: <strong>${formatMoney(grandTotal)}</strong></p></div></div>}
+    {stepIndex === 6 && !paymentComplete && <div><h3>Deposit checkout</h3><p>Service address: {formattedAddress || '-'}</p><div className="payment-grid"><div className="payment-card"><h4>Payment details</h4><div className="form-grid"><div className="full-width"><label htmlFor="cardName">Name on card</label><input id="cardName" placeholder="Jane Doe" /></div><div className="full-width"><label htmlFor="cardNumber">Card number</label><input id="cardNumber" placeholder="4242 4242 4242 4242" /></div><div><label htmlFor="expDate">Exp date</label><input id="expDate" placeholder="MM/YY" /></div><div><label htmlFor="cvc">CVC</label><input id="cvc" placeholder="123" /></div></div><button type="button" className="btn pay-btn" onClick={() => setPaymentComplete(true)}>Pay ${formatMoney(dueToday)} deposit now</button></div><div className="breakdown-card"><h4>Price breakdown</h4><ul className="price-breakdown"><li><span>Service total</span><strong>${formatMoney(serviceTotal)}</strong></li><li><span>Platform fee</span><strong>${formatMoney(platformFee)}</strong></li><li><span>Tip</span><strong>${formatMoney(tip)}</strong></li><li><span>Total</span><strong>${formatMoney(grandTotal)}</strong></li><li><span>Deposit (due now)</span><strong>${formatMoney(dueToday)}</strong></li><li><span>Remaining balance</span><strong>${formatMoney(remaining)}</strong></li></ul><p className="meta">Platform fee applies to service total only.</p></div></div><p className="meta">Backend payload address: {formattedAddress || '-'}</p></div>}
+    {stepIndex === 6 && paymentComplete && <div className="confirmation"><h3>Deposit confirmed</h3><p>Your ${formatMoney(dueToday)} deposit has been received.</p><p>Remaining balance at completion: <strong>${formatMoney(remaining)}</strong></p><p>We sent a confirmation for your booking on {booking.date || 'your selected date'} at {booking.time || 'your selected time'}.</p></div>}
   </section><div className="actions"><button className="btn secondary" disabled={stepIndex === 0} onClick={() => setStepIndex((s) => Math.max(0, s - 1))}>Back</button><button className="btn" disabled={stepIndex === steps.length - 1 || !canProceed[stepIndex]} onClick={() => setStepIndex((s) => Math.min(steps.length - 1, s + 1))}>Next</button></div></AppShell>);
 }
 

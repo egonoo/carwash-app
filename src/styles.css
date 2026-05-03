@@ -23,10 +23,27 @@ input { width: 100%; border: 1px solid #c8d5ef; border-radius: 8px; padding: 10p
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .summary { padding-left: 18px; line-height: 1.8; }
 .meta { color: #5d6f8f; font-size: 13px; }
+.tip-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid #dbe6f8; }
+.tip-buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
+.tip-buttons .choice { align-items: center; justify-content: center; }
+.custom-tip { max-width: 220px; }
+.tip-total { margin: 10px 0 0; }
+.payment-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; margin-top: 10px; }
+.payment-card,
+.breakdown-card { border: 1px solid #dbe6f8; border-radius: 10px; padding: 14px; background: #fdfefe; }
+.pay-btn { width: 100%; margin-top: 14px; font-size: 16px; padding: 12px; }
+.price-breakdown { list-style: none; margin: 0; padding: 0; }
+.price-breakdown li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eef3fd; }
+.price-breakdown li:last-child { border-bottom: none; }
+.confirmation { text-align: center; padding: 24px 8px; }
 
 @media (max-width: 640px) {
   .form-grid,
   .row {
+    grid-template-columns: 1fr;
+  }
+  .tip-buttons,
+  .payment-grid {
     grid-template-columns: 1fr;
   }
 }
