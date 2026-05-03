@@ -29,7 +29,13 @@ const steps = ['Vehicle', 'Location', 'Date & Time', 'Package', 'Add-ons', 'Summ
 function BookingProvider({ children }) {
   const [booking, setBooking] = useState({
     vehicleId: '',
-    address: '',
+    location: {
+      streetAddress: '',
+      aptUnit: '',
+      city: '',
+      state: '',
+      zipCode: ''
+    },
     date: '',
     time: '',
     packageId: '',
@@ -69,6 +75,14 @@ function CustomerBookingFlow() {
   const { booking, setBooking } = useBooking();
   const [stepIndex, setStepIndex] = useState(0);
 
+  const formattedAddress = [
+    booking.location.streetAddress,
+    booking.location.aptUnit,
+    `${booking.location.city}${booking.location.city && booking.location.state ? ', ' : ''}${booking.location.state} ${booking.location.zipCode}`.trim()
+  ]
+    .filter(Boolean)
+    .join(', ');
+
   const selectedVehicle = vehicles.find((v) => v.id === booking.vehicleId);
   const selectedPackage = packages.find((p) => p.id === booking.packageId);
   const selectedAddons = addons.filter((a) => booking.addonIds.includes(a.id));
@@ -80,7 +94,7 @@ function CustomerBookingFlow() {
 
   const canProceed = [
     Boolean(booking.vehicleId),
-    booking.address.trim().length > 5,
+    Boolean(booking.location.streetAddress.trim() && booking.location.city.trim() && booking.location.state.trim() && booking.location.zipCode.trim()),
     Boolean(booking.date && booking.time),
     Boolean(booking.packageId),
     true,
@@ -116,8 +130,28 @@ function CustomerBookingFlow() {
         {stepIndex === 1 && (
           <div>
             <h3>Service location</h3>
-            <label htmlFor="address">Address</label>
-            <input id="address" value={booking.address} onChange={(e) => setBooking((prev) => ({ ...prev, address: e.target.value }))} placeholder="Enter full address" />
+            <div className="form-grid">
+              <div className="full-width">
+                <label htmlFor="streetAddress">Street Address</label>
+                <input id="streetAddress" value={booking.location.streetAddress} onChange={(e) => setBooking((prev) => ({ ...prev, location: { ...prev.location, streetAddress: e.target.value } }))} placeholder="123 Main St" required />
+              </div>
+              <div className="full-width">
+                <label htmlFor="aptUnit">Apt / Unit</label>
+                <input id="aptUnit" value={booking.location.aptUnit} onChange={(e) => setBooking((prev) => ({ ...prev, location: { ...prev.location, aptUnit: e.target.value } }))} placeholder="Apt 4B (optional)" />
+              </div>
+              <div>
+                <label htmlFor="city">City</label>
+                <input id="city" value={booking.location.city} onChange={(e) => setBooking((prev) => ({ ...prev, location: { ...prev.location, city: e.target.value } }))} required />
+              </div>
+              <div>
+                <label htmlFor="state">State</label>
+                <input id="state" value={booking.location.state} onChange={(e) => setBooking((prev) => ({ ...prev, location: { ...prev.location, state: e.target.value } }))} placeholder="CA" required />
+              </div>
+              <div>
+                <label htmlFor="zipCode">ZIP Code</label>
+                <input id="zipCode" value={booking.location.zipCode} onChange={(e) => setBooking((prev) => ({ ...prev, location: { ...prev.location, zipCode: e.target.value } }))} required />
+              </div>
+            </div>
           </div>
         )}
 
@@ -164,7 +198,7 @@ function CustomerBookingFlow() {
             <h3>Booking summary</h3>
             <ul className="summary">
               <li>Vehicle: {selectedVehicle ? `${selectedVehicle.name} ($${selectedVehicle.price})` : '-'}</li>
-              <li>Address: {booking.address || '-'}</li>
+              <li>Address: {formattedAddress || '-'}</li>
               <li>Date: {booking.date || '-'} at {booking.time || '-'}</li>
               <li>Package: {selectedPackage ? `${selectedPackage.name} ($${selectedPackage.price})` : '-'}</li>
               <li>Add-ons: {selectedAddons.length ? selectedAddons.map((a) => `${a.name} ($${a.price})`).join(', ') : 'None'}</li>
@@ -176,9 +210,11 @@ function CustomerBookingFlow() {
         {stepIndex === 6 && (
           <div>
             <h3>Deposit</h3>
+            <p>Service address: {formattedAddress || '-'}</p>
             <p>Total: ${subtotal}</p>
             <p>Deposit due now: ${dueToday}</p>
             <p>Remaining balance at completion: ${remaining}</p>
+            <p className="meta">Backend payload address: {formattedAddress || '-'}</p>
           </div>
         )}
       </section>
