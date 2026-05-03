@@ -1,0 +1,14 @@
+:root { font-family: Inter, system-ui, Arial, sans-serif; color: #123; background:#f3f6fb; }
+body { margin: 0; }
+.app { max-width: 960px; margin: 0 auto; padding: 16px; }
+header { display:flex; justify-content:space-between; align-items:center; gap: 12px; }
+nav { display:flex; gap: 10px; }
+nav a { text-decoration:none; padding:8px 12px; border-radius:8px; background:white; color:#245; }
+nav a.active { background:#245; color:white; }
+main { margin-top: 12px; }
+.progress { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
+.progress span { font-size:12px; padding:5px 8px; background:#dbe6f8; border-radius:999px; }
+.progress .on { background:#245; color:#fff; }
+.grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
+.card { background:white; border-radius:12px; padding:18px; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+.btn { display:inline-block; margin-top:8px; background:#1f7aec; color:#fff; padding:10px 14px; border-radius:8px; text-decoration:none; }
