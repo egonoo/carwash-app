@@ -1,7 +1,6 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
-import { Prisma } from '@splash/db';
 import { BookingDraftInputSchema, type BookingDraftInput } from '@splash/schemas';
 import { withTenant } from '@/lib/rls';
 import { errs } from '@/lib/errors';
@@ -272,13 +271,15 @@ export async function createBookingDraft(
         },
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError) {
-        if (err.code === 'P2010' && (err.meta?.code ?? '') === '23P01') {
-          throw errs.doubleBooking();
-        }
-        if (err.code === 'P2002') {
-          throw errs.idempotency();
-        }
+      // Structural check — avoids depending on Prisma.PrismaClientKnownRequestError
+      // being exported as a runtime value. P2010+meta.code='23P01' is the EXCLUDE
+      // overlap conflict; P2002 is the idempotency-key uniqueness violation.
+      const e = err as { code?: string; meta?: { code?: unknown } };
+      if (e.code === 'P2010' && (e.meta?.code ?? '') === '23P01') {
+        throw errs.doubleBooking();
+      }
+      if (e.code === 'P2002') {
+        throw errs.idempotency();
       }
       throw err;
     }

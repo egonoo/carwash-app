@@ -1,6 +1,5 @@
 'use server';
 
-import { Prisma } from '@splash/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -233,11 +232,11 @@ export async function createAdminAppointment(
         });
         createdId = appt.id;
       } catch (err) {
-        if (
-          err instanceof Prisma.PrismaClientKnownRequestError &&
-          err.code === 'P2010' &&
-          (err.meta?.code ?? '') === '23P01'
-        ) {
+        // Structural check — avoids depending on Prisma.PrismaClientKnownRequestError
+        // being exported as a runtime value. The (P2010, meta.code='23P01') pair
+        // identifies the appointment EXCLUDE-overlap conflict from Postgres.
+        const e = err as { code?: string; meta?: { code?: unknown } };
+        if (e.code === 'P2010' && (e.meta?.code ?? '') === '23P01') {
           throw errs.doubleBooking();
         }
         throw err;
