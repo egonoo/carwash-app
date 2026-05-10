@@ -1,5 +1,15 @@
 import { Prisma } from '@splash/db';
-import type { AuditAction } from '@splash/db';
+
+// Mirror of the Prisma AuditAction enum. Defined locally so the build does
+// not depend on the enum being re-exported by @splash/db.
+type AuditAction =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'state_change'
+  | 'grant'
+  | 'revoke'
+  | 'adjust';
 
 export type AuditInput = {
   businessId: string;

@@ -1,4 +1,8 @@
-import type { Prisma, DiscountValueType } from '@splash/db';
+import type { Prisma } from '@splash/db';
+
+// Mirror of the Prisma DiscountValueType enum. Defined locally so the build
+// does not depend on the enum being re-exported by @splash/db.
+type DiscountValueType = 'percentage' | 'fixed';
 
 export type LoyaltyEligibility = {
   program: {

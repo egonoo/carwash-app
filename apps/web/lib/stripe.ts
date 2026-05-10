@@ -6,7 +6,13 @@ export function getStripe(): Stripe {
   if (_client) return _client;
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('STRIPE_SECRET_KEY is required');
-  _client = new Stripe(key, { apiVersion: '2024-10-28.acacia', typescript: true });
+  // The Stripe SDK type narrows apiVersion to its newest literal; we keep
+  // the runtime version pinned exactly as before via a type-only cast so
+  // Stripe behavior is unchanged.
+  _client = new Stripe(key, {
+    apiVersion: '2024-10-28.acacia' as Stripe.LatestApiVersion,
+    typescript: true,
+  });
   return _client;
 }
 

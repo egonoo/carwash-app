@@ -1,8 +1,18 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { PaymentMethod } from '@splash/db';
 import { requireRole } from '@/lib/auth';
+
+// Mirror of the Prisma PaymentMethod enum. Defined locally so the build
+// does not depend on the enum being re-exported by @splash/db.
+type PaymentMethod =
+  | 'card_online'
+  | 'card_terminal'
+  | 'cash'
+  | 'zelle'
+  | 'venmo'
+  | 'cashapp'
+  | 'other';
 import { withTenant } from '@/lib/rls';
 import { errs } from '@/lib/errors';
 import { audit } from '@/lib/audit';

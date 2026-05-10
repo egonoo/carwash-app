@@ -1,10 +1,11 @@
-import type {
-  Prisma,
-  AddonPricingMode,
-  DiscountValueType,
-  DepositPolicyType,
-} from '@splash/db';
+import type { Prisma } from '@splash/db';
 import { loyaltyEligibility, type LoyaltyEligibility } from '@/lib/loyalty/eligibility';
+
+// Mirrors of Prisma enums. Defined locally so the build does not depend on
+// the enums being re-exported by @splash/db.
+type AddonPricingMode = 'fixed' | 'starting_at' | 'per_unit' | 'quote_on_site';
+type DiscountValueType = 'percentage' | 'fixed';
+type DepositPolicyType = 'fixed' | 'percentage';
 
 // =============================================================================
 // Tipos públicos

@@ -1,7 +1,21 @@
 'use server';
 
-import type { AppointmentStatus } from '@splash/db';
 import { z } from 'zod';
+
+// Mirror of the Prisma AppointmentStatus enum. Defined locally so the build
+// does not depend on the enum being re-exported by @splash/db.
+type AppointmentStatus =
+  | 'draft'
+  | 'pending_deposit'
+  | 'awaiting_zelle'
+  | 'confirmed'
+  | 'on_the_way'
+  | 'arrived'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled'
+  | 'no_show'
+  | 'rescheduled';
 import { UpdateAppointmentStatusSchema, AddManualExtraSchema } from '@splash/schemas';
 import { withTenant } from '@/lib/rls';
 import { requireRole } from '@/lib/auth';
@@ -12,6 +26,7 @@ import { computePricing } from '@/lib/pricing/engine';
 const TRANSITIONS: Record<AppointmentStatus, AppointmentStatus[]> = {
   draft: ['pending_deposit', 'cancelled'],
   pending_deposit: ['confirmed', 'cancelled'],
+  awaiting_zelle: ['confirmed', 'cancelled'],
   confirmed: ['on_the_way', 'arrived', 'cancelled', 'no_show', 'rescheduled'],
   on_the_way: ['arrived', 'cancelled', 'no_show'],
   arrived: ['in_progress', 'cancelled', 'no_show'],

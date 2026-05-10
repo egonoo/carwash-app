@@ -132,7 +132,7 @@ export async function GET(
     const contentType = result.ContentType ?? photo.mimeType ?? 'application/octet-stream';
     const body = normalizeBody(result.Body);
 
-    return new NextResponse(body, {
+    return new NextResponse(body as BodyInit, {
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'private, max-age=60',

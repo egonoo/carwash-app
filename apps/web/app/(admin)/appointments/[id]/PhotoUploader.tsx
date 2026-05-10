@@ -74,7 +74,7 @@ export function PhotoUploader(props: Props) {
       try {
         for (let i = 0; i < files.length; i++) {
           setProgress(`Uploading ${i + 1}/${files.length}…`);
-          await uploadFile(files[i]);
+          await uploadFile(files[i]!);
         }
         setProgress(null);
         setNote('');

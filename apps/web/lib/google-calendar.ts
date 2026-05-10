@@ -118,7 +118,7 @@ export function emailFromIdToken(idToken: string): string | null {
   if (parts.length !== 3) return null;
   try {
     const payload = JSON.parse(
-      Buffer.from(parts[1], 'base64url').toString('utf8'),
+      Buffer.from(parts[1]!, 'base64url').toString('utf8'),
     ) as { email?: string };
     return payload.email ?? null;
   } catch {
