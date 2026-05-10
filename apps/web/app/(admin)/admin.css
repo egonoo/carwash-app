@@ -118,18 +118,14 @@
   backdrop-filter: blur(12px);
 }
 
-/* ----------------------- forms (.input/.label from globals.css) ----------------------- */
+/* ----------------------- forms (.input/.label from globals.css) -----------------------
+ * Use a catch-all `input` selector so it matches every text-like input
+ * including those rendered without an explicit `type` attribute. The
+ * checkbox/radio rules below come later in the file and take precedence
+ * on equal specificity for those types.
+ */
 .admin-shell .input,
-.admin-shell input[type='text'],
-.admin-shell input[type='email'],
-.admin-shell input[type='password'],
-.admin-shell input[type='number'],
-.admin-shell input[type='search'],
-.admin-shell input[type='tel'],
-.admin-shell input[type='url'],
-.admin-shell input[type='date'],
-.admin-shell input[type='time'],
-.admin-shell input[type='datetime-local'],
+.admin-shell input,
 .admin-shell select,
 .admin-shell textarea {
   background-color: rgba(255, 255, 255, 0.04);
@@ -157,6 +153,21 @@
   color: rgba(255, 255, 255, 0.82);
 }
 
+/* Native color picker keeps its preview chip */
+.admin-shell input[type='color'] {
+  background: transparent;
+  padding: 0;
+}
+
+/* Disabled state should remain visibly distinct */
+.admin-shell input:disabled,
+.admin-shell select:disabled,
+.admin-shell textarea:disabled {
+  background-color: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.4);
+  cursor: not-allowed;
+}
+
 /* checkbox/radio: Tailwind forms plugin */
 .admin-shell input[type='checkbox'],
 .admin-shell input[type='radio'] {
@@ -168,6 +179,14 @@
 .admin-shell input[type='radio']:checked {
   background-color: #0a84ff;
   border-color: #0a84ff;
+}
+
+/* native disabled background utility used in some forms */
+.admin-shell .disabled\:bg-neutral-100:disabled {
+  background-color: rgba(255, 255, 255, 0.025);
+}
+.admin-shell .disabled\:text-neutral-400:disabled {
+  color: rgba(255, 255, 255, 0.35);
 }
 
 /* ----------------------- buttons ----------------------- */
@@ -191,6 +210,16 @@
   background-color: #0a84ff;
 }
 .admin-shell .hover\:bg-indigo-700:hover {
+  background-color: #0057d9;
+}
+
+/* Some admin pages use `bg-black` / `hover:bg-neutral-800` for save buttons.
+ * Re-skin those to match the brand instead of disappearing into the dark UI. */
+.admin-shell .bg-black {
+  background-color: #0a84ff;
+  color: #fff;
+}
+.admin-shell .hover\:bg-neutral-800:hover {
   background-color: #0057d9;
 }
 
