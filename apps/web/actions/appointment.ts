@@ -1,6 +1,6 @@
 'use server';
 
-import { AppointmentStatus } from '@splash/db';
+import type { AppointmentStatus } from '@splash/db';
 import { z } from 'zod';
 import { UpdateAppointmentStatusSchema, AddManualExtraSchema } from '@splash/schemas';
 import { withTenant } from '@/lib/rls';

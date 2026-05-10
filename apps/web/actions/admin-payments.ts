@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { PaymentKind, PaymentMethod } from '@splash/db';
+import type { PaymentMethod } from '@splash/db';
 import { requireRole } from '@/lib/auth';
 import { withTenant } from '@/lib/rls';
 import { errs } from '@/lib/errors';
@@ -43,7 +43,7 @@ export async function confirmZelleDeposit(appointmentId: string) {
         status: 'confirmed',
         confirmedAt: now,
         depositStatus: 'paid',
-        depositMethod: PaymentMethod.zelle,
+        depositMethod: 'zelle',
         depositPaidCents: appt.depositAmountCents,
         depositPaidAt: now,
       },
@@ -53,8 +53,8 @@ export async function confirmZelleDeposit(appointmentId: string) {
       data: {
         businessId: session.activeBusinessId,
         appointmentId,
-        kind: PaymentKind.deposit,
-        method: PaymentMethod.zelle,
+        kind: 'deposit',
+        method: 'zelle',
         amountCents: appt.depositAmountCents,
         receivedByUserId: session.userId,
         processedAt: now,
@@ -83,11 +83,11 @@ type BalanceMethod = 'cash' | 'zelle' | 'card';
 function mapBalanceMethod(m: BalanceMethod): PaymentMethod {
   switch (m) {
     case 'cash':
-      return PaymentMethod.cash;
+      return 'cash';
     case 'zelle':
-      return PaymentMethod.zelle;
+      return 'zelle';
     case 'card':
-      return PaymentMethod.card_terminal;
+      return 'card_terminal';
   }
 }
 
@@ -132,7 +132,7 @@ export async function markBalancePaid(appointmentId: string, method: BalanceMeth
       data: {
         businessId: session.activeBusinessId,
         appointmentId,
-        kind: PaymentKind.final,
+        kind: 'final',
         method: pm,
         amountCents: appt.balanceDueCents,
         receivedByUserId: session.userId,

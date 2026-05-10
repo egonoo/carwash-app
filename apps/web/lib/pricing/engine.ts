@@ -1,5 +1,9 @@
-import type { Prisma } from '@splash/db';
-import { AddonPricingMode, DiscountValueType, DepositPolicyType } from '@splash/db';
+import type {
+  Prisma,
+  AddonPricingMode,
+  DiscountValueType,
+  DepositPolicyType,
+} from '@splash/db';
 import { loyaltyEligibility, type LoyaltyEligibility } from '@/lib/loyalty/eligibility';
 
 // =============================================================================
@@ -147,17 +151,17 @@ export async function computePricing(
     let notes: string | null = null;
     let requiresQuote = false;
     switch (a.pricingMode) {
-      case AddonPricingMode.fixed:
+      case 'fixed':
         unit = a.basePriceCents;
         break;
-      case AddonPricingMode.starting_at:
+      case 'starting_at':
         unit = a.basePriceCents;
         notes = 'Starting price — admin may confirm final price on site.';
         break;
-      case AddonPricingMode.per_unit:
+      case 'per_unit':
         unit = a.basePriceCents; // * qty done below
         break;
-      case AddonPricingMode.quote_on_site:
+      case 'quote_on_site':
         unit = 0;
         requiresQuote = true;
         notes = 'Quote provided on site; not charged in deposit.';
@@ -358,7 +362,7 @@ function computeDiscountAmount(
   value: number,
 ): number {
   if (baseCents <= 0) return 0;
-  if (type === DiscountValueType.percentage) {
+  if (type === 'percentage') {
     return Math.min(baseCents, Math.round((baseCents * value) / 10000));
   }
   return Math.min(baseCents, value);
@@ -371,6 +375,6 @@ function computeDeposit(
   minCents: number,
 ): number {
   const raw =
-    type === DepositPolicyType.fixed ? value : Math.round((totalCents * value) / 10000);
+    type === 'fixed' ? value : Math.round((totalCents * value) / 10000);
   return Math.max(minCents, Math.min(totalCents, raw));
 }

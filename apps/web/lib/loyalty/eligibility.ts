@@ -1,5 +1,4 @@
-import type { Prisma } from '@splash/db';
-import { DiscountValueType } from '@splash/db';
+import type { Prisma, DiscountValueType } from '@splash/db';
 
 export type LoyaltyEligibility = {
   program: {

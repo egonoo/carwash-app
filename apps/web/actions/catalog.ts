@@ -6,7 +6,12 @@ import { revalidatePath } from 'next/cache';
 import { withTenant } from '@/lib/rls';
 import { requireRole } from '@/lib/auth';
 import { audit } from '@/lib/audit';
-import { AddonPricingMode, Prisma } from '@splash/db';
+import type { Prisma } from '@splash/db';
+
+// String-literal mirror of the Prisma AddonPricingMode enum. We declare it
+// here instead of importing the enum const from @splash/db so the build does
+// not depend on Prisma's runtime enum exports being present.
+const ADDON_PRICING_MODES = ['fixed', 'starting_at', 'per_unit', 'quote_on_site'] as const;
 
 // ============ Packages ============
 const UpsertPackageSchema = z.object({
@@ -168,7 +173,7 @@ const UpsertAddonSchema = z.object({
   slug: z.string().trim().min(2).max(40).regex(/^[a-z0-9-]+$/),
   name: z.string().trim().min(2).max(100),
   description: z.string().max(500).optional(),
-  pricingMode: z.nativeEnum(AddonPricingMode),
+  pricingMode: z.enum(ADDON_PRICING_MODES),
   basePriceCents: cents,
   durationMinutes: z.number().int().min(0).max(600),
   defaultQuantity: z.number().int().min(1).default(1),
@@ -226,7 +231,7 @@ async function uniqueAddonSlug(
 
 const CreateAdminAddonSchema = z.object({
   name: z.string().trim().min(2).max(100),
-  pricingMode: z.nativeEnum(AddonPricingMode),
+  pricingMode: z.enum(ADDON_PRICING_MODES),
   basePriceCents: cents.nullable(),
   durationMinutes: z.number().int().min(0).max(600),
   isActive: z.boolean().default(true),
@@ -255,7 +260,7 @@ export async function createAdminAddon(
         durationMinutes: parsed.durationMinutes,
         defaultQuantity: 1,
         maxQuantity: 10,
-        requiresAdminQuote: parsed.pricingMode === AddonPricingMode.quote_on_site,
+        requiresAdminQuote: parsed.pricingMode === 'quote_on_site',
         displayOrder: (lastOrder._max.displayOrder ?? -1) + 1,
         isActive: parsed.isActive,
       },
@@ -281,7 +286,7 @@ export async function createAdminAddon(
 const UpdateAdminAddonSchema = z.object({
   id: uuid,
   name: z.string().trim().min(2).max(100),
-  pricingMode: z.nativeEnum(AddonPricingMode),
+  pricingMode: z.enum(ADDON_PRICING_MODES),
   basePriceCents: cents.nullable(),
   durationMinutes: z.number().int().min(0).max(600),
   isActive: z.boolean(),
