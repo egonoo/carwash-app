@@ -1,6 +1,6 @@
 'use server';
 
-import { AppointmentItemKind, Prisma } from '@splash/db';
+import { Prisma } from '@splash/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -252,10 +252,10 @@ export async function createAdminAppointment(
               appointmentId: createdId,
               kind:
                 li.kind === 'package'
-                  ? AppointmentItemKind.package
+                  ? 'package'
                   : li.kind === 'addon'
-                    ? AppointmentItemKind.addon
-                    : AppointmentItemKind.manual_extra,
+                    ? 'addon'
+                    : 'manual_extra',
               refId: li.refId,
               nameSnapshot: li.name,
               descriptionSnapshot: li.description ?? null,

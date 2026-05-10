@@ -1,7 +1,7 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
-import { Prisma, AppointmentItemKind } from '@splash/db';
+import { Prisma } from '@splash/db';
 import { BookingDraftInputSchema, type BookingDraftInput } from '@splash/schemas';
 import { withTenant } from '@/lib/rls';
 import { errs } from '@/lib/errors';
@@ -292,10 +292,10 @@ export async function createBookingDraft(
           appointmentId: appointment.id,
           kind:
             li.kind === 'package'
-              ? AppointmentItemKind.package
+              ? 'package'
               : li.kind === 'addon'
-                ? AppointmentItemKind.addon
-                : AppointmentItemKind.manual_extra,
+                ? 'addon'
+                : 'manual_extra',
           refId: li.refId,
           nameSnapshot: li.name,
           descriptionSnapshot: li.description ?? null,
