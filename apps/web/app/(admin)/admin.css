@@ -1,0 +1,299 @@
+/*
+ * Dark admin theme — scoped to `.admin-shell` so it never leaks into the
+ * marketing, booking, or auth layouts. Overrides the most common Tailwind
+ * color/border/background utility outcomes used across admin pages without
+ * requiring per-page edits.
+ *
+ * NOTE: This file changes presentation only — no server actions, no API
+ * routes, no business logic, no schema. Page components keep their original
+ * markup and class names; the cascade swaps colors at the admin shell layer.
+ */
+
+.admin-shell {
+  background: #06070A;
+  color: rgba(255, 255, 255, 0.9);
+  min-height: 100%;
+}
+
+/* Ambient marketing-style background — radial brand glow + subtle grid */
+.admin-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1100px 540px at 80% -10%, rgba(10, 132, 255, 0.10), transparent 60%),
+    radial-gradient(900px 500px at -10% 30%, rgba(94, 92, 230, 0.08), transparent 65%);
+}
+.admin-shell::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.025;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.6) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.6) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+.admin-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ----------------------- typography ----------------------- */
+.admin-shell h1,
+.admin-shell h2 {
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.admin-shell h3,
+.admin-shell h4 {
+  color: rgba(255, 255, 255, 0.96);
+}
+
+/* ----------------------- backgrounds ----------------------- */
+.admin-shell .bg-white {
+  background-color: rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(12px);
+}
+.admin-shell .bg-neutral-50 {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+.admin-shell .bg-neutral-100 {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+.admin-shell .bg-neutral-900 {
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+/* hover variants */
+.admin-shell .hover\:bg-white:hover {
+  background-color: rgba(255, 255, 255, 0.045);
+}
+.admin-shell .hover\:bg-neutral-50:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+.admin-shell .hover\:bg-neutral-100:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ----------------------- text ----------------------- */
+.admin-shell .text-neutral-900 { color: #ffffff; }
+.admin-shell .text-neutral-800 { color: rgba(255, 255, 255, 0.92); }
+.admin-shell .text-neutral-700 { color: rgba(255, 255, 255, 0.82); }
+.admin-shell .text-neutral-600 { color: rgba(255, 255, 255, 0.66); }
+.admin-shell .text-neutral-500 { color: rgba(255, 255, 255, 0.55); }
+.admin-shell .text-neutral-400 { color: rgba(255, 255, 255, 0.4); }
+.admin-shell .text-neutral-300 { color: rgba(255, 255, 255, 0.32); }
+
+.admin-shell .hover\:text-neutral-900:hover { color: #ffffff; }
+.admin-shell .hover\:text-white:hover { color: #ffffff; }
+
+/* ----------------------- borders ----------------------- */
+.admin-shell .border-neutral-200 { border-color: rgba(255, 255, 255, 0.07); }
+.admin-shell .border-neutral-300 { border-color: rgba(255, 255, 255, 0.1); }
+.admin-shell .divide-neutral-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+.admin-shell .ring-neutral-200\/70 {
+  --tw-ring-color: rgba(255, 255, 255, 0.07);
+}
+
+/* Neutral default border (Tailwind's `.border` uses `--tw-border-opacity`
+ * applied to neutral-200 via globals.css → border-neutral-200) */
+.admin-shell * {
+  border-color: rgba(255, 255, 255, 0.07);
+}
+
+/* ----------------------- cards (.card from globals.css) ----------------------- */
+.admin-shell .card {
+  background: rgba(255, 255, 255, 0.025);
+  --tw-ring-color: rgba(255, 255, 255, 0.07);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 0 rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(12px);
+}
+
+/* ----------------------- forms (.input/.label from globals.css) ----------------------- */
+.admin-shell .input,
+.admin-shell input[type='text'],
+.admin-shell input[type='email'],
+.admin-shell input[type='password'],
+.admin-shell input[type='number'],
+.admin-shell input[type='search'],
+.admin-shell input[type='tel'],
+.admin-shell input[type='url'],
+.admin-shell input[type='date'],
+.admin-shell input[type='time'],
+.admin-shell input[type='datetime-local'],
+.admin-shell select,
+.admin-shell textarea {
+  background-color: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.admin-shell .input::placeholder,
+.admin-shell input::placeholder,
+.admin-shell textarea::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+.admin-shell .input:focus,
+.admin-shell input:focus,
+.admin-shell select:focus,
+.admin-shell textarea:focus {
+  border-color: #0a84ff;
+  --tw-ring-color: rgba(10, 132, 255, 0.35);
+}
+.admin-shell select option {
+  color: #0f172a; /* native option lists are not themed */
+  background: #fff;
+}
+.admin-shell .label,
+.admin-shell label {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* checkbox/radio: Tailwind forms plugin */
+.admin-shell input[type='checkbox'],
+.admin-shell input[type='radio'] {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #0a84ff; /* checkmark color */
+}
+.admin-shell input[type='checkbox']:checked,
+.admin-shell input[type='radio']:checked {
+  background-color: #0a84ff;
+  border-color: #0a84ff;
+}
+
+/* ----------------------- buttons ----------------------- */
+.admin-shell .btn-primary {
+  background-color: #0a84ff;
+  color: #fff;
+}
+.admin-shell .btn-primary:hover {
+  background-color: #0057d9;
+}
+.admin-shell .btn-ghost {
+  color: rgba(255, 255, 255, 0.85);
+}
+.admin-shell .btn-ghost:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+/* admin's primary-button color was inline indigo-600 across many pages */
+.admin-shell .bg-indigo-600 {
+  background-color: #0a84ff;
+}
+.admin-shell .hover\:bg-indigo-700:hover {
+  background-color: #0057d9;
+}
+
+/* ----------------------- status / accent palettes ----------------------- */
+.admin-shell .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.10); }
+.admin-shell .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.16); }
+.admin-shell .border-emerald-200 { border-color: rgba(16, 185, 129, 0.25); }
+.admin-shell .text-emerald-700 { color: rgb(110, 231, 183); }
+.admin-shell .text-emerald-800 { color: rgb(110, 231, 183); }
+.admin-shell .text-emerald-900 { color: rgb(167, 243, 208); }
+
+.admin-shell .bg-amber-50 { background-color: rgba(245, 158, 11, 0.10); }
+.admin-shell .bg-amber-100 { background-color: rgba(245, 158, 11, 0.16); }
+.admin-shell .border-amber-200 { border-color: rgba(245, 158, 11, 0.25); }
+.admin-shell .text-amber-700 { color: rgb(252, 211, 77); }
+.admin-shell .text-amber-800 { color: rgb(252, 211, 77); }
+.admin-shell .text-amber-900 { color: rgb(254, 240, 138); }
+
+.admin-shell .bg-red-50 { background-color: rgba(239, 68, 68, 0.10); }
+.admin-shell .bg-red-100 { background-color: rgba(239, 68, 68, 0.16); }
+.admin-shell .border-red-200 { border-color: rgba(239, 68, 68, 0.25); }
+.admin-shell .text-red-600 { color: rgb(252, 165, 165); }
+.admin-shell .text-red-700 { color: rgb(252, 165, 165); }
+.admin-shell .text-red-800 { color: rgb(252, 165, 165); }
+.admin-shell .text-red-900 { color: rgb(254, 202, 202); }
+
+.admin-shell .bg-sky-50 { background-color: rgba(14, 165, 233, 0.10); }
+.admin-shell .bg-sky-100 { background-color: rgba(14, 165, 233, 0.16); }
+.admin-shell .border-sky-200 { border-color: rgba(14, 165, 233, 0.25); }
+.admin-shell .text-sky-700 { color: rgb(125, 211, 252); }
+.admin-shell .text-sky-800 { color: rgb(125, 211, 252); }
+.admin-shell .text-sky-900 { color: rgb(186, 230, 253); }
+
+.admin-shell .bg-violet-50 { background-color: rgba(139, 92, 246, 0.10); }
+.admin-shell .bg-violet-100 { background-color: rgba(139, 92, 246, 0.16); }
+.admin-shell .text-violet-700 { color: rgb(196, 181, 253); }
+
+/* ----------------------- tables ----------------------- */
+.admin-shell table thead {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+.admin-shell table thead th {
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.04em;
+}
+.admin-shell table tbody tr {
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* ----------------------- dashed dividers/empty states ----------------------- */
+.admin-shell .border-dashed {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ----------------------- spinner / scrollbars (chromium) ----------------------- */
+.admin-shell ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.admin-shell ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+.admin-shell ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ----------------------- sidebar ----------------------- */
+.admin-sidebar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
+    rgba(8, 10, 16, 0.85);
+  border-color: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+}
+.admin-sidebar a.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.65);
+  border: 1px solid transparent;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.admin-sidebar a.nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.95);
+}
+.admin-sidebar a.nav-link[data-active='true'] {
+  background:
+    linear-gradient(180deg, rgba(10, 132, 255, 0.16), rgba(10, 132, 255, 0.06));
+  color: #ffffff;
+  border-color: rgba(10, 132, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 8px 30px -16px rgba(10, 132, 255, 0.6);
+}
+.admin-sidebar a.nav-link[data-active='true'] .nav-icon {
+  color: #5eb1ff;
+}
+.admin-sidebar .nav-icon {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.5);
+}
