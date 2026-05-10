@@ -56,9 +56,17 @@ export async function enumerateDaySlots(
   const startOfDay = fromZonedTime(`${date}T00:00:00`, timezone);
   const endOfDay = fromZonedTime(`${date}T23:59:59`, timezone);
 
-  const exceptions = await tx.scheduleException.findMany({
+  // Defensive row types — keep this file independent of Prisma's generated
+  // row types in case they aren't fully available at build time.
+  type ExceptionRow = { kind: string; payload: unknown };
+  type ScheduleTemplateRow = { windowStart: Date; windowEnd: Date };
+  type BlockRow = { startsAt: Date; endsAt: Date };
+  type ResourceRow = { id: string };
+  type AppointmentRow = { startsAt: Date; endsAt: Date; resourceId: string };
+
+  const exceptions = (await tx.scheduleException.findMany({
     where: { businessId, exceptionDate: dayDate },
-  });
+  })) as ExceptionRow[];
   if (exceptions.some((e) => e.kind === 'closed')) {
     return { closed: true, slots: [] };
   }
@@ -73,9 +81,9 @@ export async function enumerateDaySlots(
       endMin: minutesOfDay(w.end),
     }));
   } else {
-    const tpls = await tx.scheduleTemplate.findMany({
+    const tpls = (await tx.scheduleTemplate.findMany({
       where: { businessId, dayOfWeek, isActive: true, kind: 'work' },
-    });
+    })) as ScheduleTemplateRow[];
     workWindows = tpls.map((t) => ({
       startMin: minutesFromTime(t.windowStart),
       endMin: minutesFromTime(t.windowEnd),
@@ -85,15 +93,15 @@ export async function enumerateDaySlots(
     return { closed: true, slots: [] };
   }
 
-  const breakRows = await tx.scheduleTemplate.findMany({
+  const breakRows = (await tx.scheduleTemplate.findMany({
     where: { businessId, dayOfWeek, isActive: true, kind: 'break' },
-  });
+  })) as ScheduleTemplateRow[];
   const breakWindows: WindowMin[] = breakRows.map((b) => ({
     startMin: minutesFromTime(b.windowStart),
     endMin: minutesFromTime(b.windowEnd),
   }));
 
-  const blocks = await tx.scheduleBlock.findMany({
+  const blocks = (await tx.scheduleBlock.findMany({
     where: {
       businessId,
       startsAt: { lt: endOfDay },
@@ -101,22 +109,22 @@ export async function enumerateDaySlots(
       OR: zoneId ? [{ zoneId: null }, { zoneId }] : [{ zoneId: null }],
     },
     select: { startsAt: true, endsAt: true },
-  });
+  })) as BlockRow[];
 
-  const resources = await tx.resource.findMany({
+  const resources = (await tx.resource.findMany({
     where: { businessId, isActive: true, archivedAt: null },
     select: { id: true },
-  });
+  })) as ResourceRow[];
   const resourceCount = resources.length;
 
-  const appointments = await tx.appointment.findMany({
+  const appointments = (await tx.appointment.findMany({
     where: {
       businessId,
       status: { notIn: ['cancelled', 'no_show', 'draft', 'rescheduled'] },
       AND: [{ startsAt: { lt: endOfDay } }, { endsAt: { gt: startOfDay } }],
     },
     select: { startsAt: true, endsAt: true, resourceId: true },
-  });
+  })) as AppointmentRow[];
 
   const labelFmt = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,

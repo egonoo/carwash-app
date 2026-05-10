@@ -41,10 +41,32 @@ export async function loyaltyEligibility(
   tx: Prisma.TransactionClient,
   args: { businessId: string; vehicleId: string; packageId: string },
 ): Promise<LoyaltyEligibility> {
-  const program = await tx.loyaltyProgram.findUnique({
+  // Defensive row types — keep the file independent of Prisma's generated row
+  // types in case they are not available at build time.
+  type TierRow = {
+    id: string;
+    visitsRequired: number;
+    appliesToPackageIds: string[];
+    maxRedemptionsPerVehicle: number;
+    discountType: DiscountValueType;
+    discountValue: number;
+    name: string | null;
+  };
+  type ProgramWithTiers =
+    | {
+        id: string;
+        isActive: boolean;
+        appliesToAddons: boolean;
+        autoApply: boolean;
+        countPackagesOnly: boolean;
+        tiers: TierRow[];
+      }
+    | null;
+
+  const program = (await tx.loyaltyProgram.findUnique({
     where: { businessId: args.businessId },
     include: { tiers: { where: { isActive: true }, orderBy: { visitsRequired: 'asc' } } },
-  });
+  })) as ProgramWithTiers;
 
   const progress = await tx.loyaltyProgress.findUnique({
     where: { vehicleId: args.vehicleId },
@@ -102,7 +124,8 @@ export async function loyaltyEligibility(
   }
 
   // Cuántas veces se redimió cada tier para este vehículo (contando activas, no revocadas)
-  const redemptions = await tx.loyaltyRedemption.groupBy({
+  type RedemptionGroup = { tierId: string | null; _count: { _all: number } };
+  const redemptionsRaw = await tx.loyaltyRedemption.groupBy({
     by: ['tierId'],
     where: {
       businessId: args.businessId,
@@ -112,7 +135,8 @@ export async function loyaltyEligibility(
     },
     _count: { _all: true },
   });
-  const usedByTier = new Map(redemptions.map((r) => [r.tierId, r._count._all]));
+  const redemptions = redemptionsRaw as unknown as RedemptionGroup[];
+  const usedByTier = new Map(redemptions.map((r) => [r.tierId, r._count._all] as const));
 
   // Elegibles: los que aún no agotaron maxRedemptionsPerVehicle
   const stillEligible = candidates.filter((t) => {

@@ -115,12 +115,23 @@ export async function computePricing(
   }
 
   // 3. Addons referenced
-  const addonRows = input.addons.length
-    ? await tx.addon.findMany({
+  type AddonRow = {
+    id: string;
+    name: string;
+    description: string | null;
+    pricingMode: AddonPricingMode;
+    basePriceCents: number;
+    durationMinutes: number;
+    maxQuantity: number;
+    isActive: boolean;
+    archivedAt: Date | null;
+  };
+  const addonRows: AddonRow[] = input.addons.length
+    ? ((await tx.addon.findMany({
         where: { id: { in: input.addons.map((a) => a.addonId) } },
-      })
+      })) as AddonRow[])
     : [];
-  const addonById = new Map(addonRows.map((a) => [a.id, a]));
+  const addonById = new Map(addonRows.map((a) => [a.id, a] as const));
 
   // 4. Build line items
   const lineItems: PricingLineItem[] = [];

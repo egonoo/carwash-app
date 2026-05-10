@@ -30,10 +30,14 @@ export async function recordPayment(input: z.infer<typeof RecordPaymentSchema>) 
     });
 
     // Recompute balance
-    const payments = await tx.payment.findMany({
+    type PaymentRow = {
+      amountCents: number;
+      kind: 'deposit' | 'final' | 'refund' | 'tip' | 'extra';
+    };
+    const payments = (await tx.payment.findMany({
       where: { appointmentId: appt.id },
       select: { amountCents: true, kind: true },
-    });
+    })) as PaymentRow[];
     const totalPaid = payments
       .filter((p) => p.kind !== 'refund')
       .reduce((s, p) => s + p.amountCents, 0);

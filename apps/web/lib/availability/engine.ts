@@ -62,10 +62,26 @@ export async function computeAvailability(
   const startOfDayLocal = fromZonedTime(`${input.date}T00:00:00`, tz);
   const endOfDayLocal = fromZonedTime(`${input.date}T23:59:59`, tz);
 
+  // Defensive row types — keep this file independent of Prisma's generated row
+  // types in case they aren't fully available at build time.
+  type ExceptionRow = { kind: string; payload: unknown };
+  type ScheduleTemplateRow = { windowStart: Date; windowEnd: Date };
+  type AssignmentRow = { zoneId: string };
+  type ScheduleBlockRow = { startsAt: Date; endsAt: Date; resourceId: string | null };
+  type ResourceRow = { id: string };
+  type AppointmentRow = {
+    id: string;
+    startsAt: Date;
+    endsAt: Date;
+    resourceId: string;
+    zoneId: string;
+  };
+  type TravelTimeRow = { fromZoneId: string; toZoneId: string; minutes: number };
+
   // 3. ¿Hay exception del día?
-  const exceptions = await tx.scheduleException.findMany({
+  const exceptions = (await tx.scheduleException.findMany({
     where: { businessId: input.businessId, exceptionDate: dayDate },
-  });
+  })) as ExceptionRow[];
   const closed = exceptions.some((e) => e.kind === 'closed');
   if (closed) return [];
 
@@ -80,9 +96,9 @@ export async function computeAvailability(
       endMinutes: minutesOfDay(w.end),
     }));
   } else {
-    const templates = await tx.scheduleTemplate.findMany({
+    const templates = (await tx.scheduleTemplate.findMany({
       where: { businessId: input.businessId, dayOfWeek, isActive: true, kind: 'work' },
-    });
+    })) as ScheduleTemplateRow[];
     windows = templates.map((t) => ({
       startMinutes: minutesFromTime(t.windowStart),
       endMinutes: minutesFromTime(t.windowEnd),
@@ -91,9 +107,9 @@ export async function computeAvailability(
   if (!windows.length) return [];
 
   // 4b. Restar break windows recurrentes (kind = 'break') de las ventanas de trabajo.
-  const breakRows = await tx.scheduleTemplate.findMany({
+  const breakRows = (await tx.scheduleTemplate.findMany({
     where: { businessId: input.businessId, dayOfWeek, isActive: true, kind: 'break' },
-  });
+  })) as ScheduleTemplateRow[];
   if (breakRows.length) {
     const breaks: Window[] = breakRows.map((b) => ({
       startMinutes: minutesFromTime(b.windowStart),
@@ -111,46 +127,46 @@ export async function computeAvailability(
     const payload = zoneChange.payload as { zone_ids?: string[] };
     zonesActive = payload.zone_ids ?? [];
   } else {
-    const assignments = await tx.scheduleTemplateZone.findMany({
+    const assignments = (await tx.scheduleTemplateZone.findMany({
       where: { businessId: input.businessId, dayOfWeek },
       select: { zoneId: true },
-    });
+    })) as AssignmentRow[];
     zonesActive = assignments.map((a) => a.zoneId);
   }
   if (!zonesActive.includes(input.zoneId)) return [];
 
   // 6. Business defaults (travel time)
-  const business = await tx.business.findUniqueOrThrow({
+  const business = (await tx.business.findUniqueOrThrow({
     where: { id: input.businessId },
     select: { defaultTravelTimeMin: true },
-  });
+  })) as { defaultTravelTimeMin: number };
 
   // 7. Bloqueos manuales
-  const blocks = await tx.scheduleBlock.findMany({
+  const blocks = (await tx.scheduleBlock.findMany({
     where: {
       businessId: input.businessId,
       AND: [{ startsAt: { lt: endOfDayLocal } }, { endsAt: { gt: startOfDayLocal } }],
       OR: [{ zoneId: null }, { zoneId: input.zoneId }],
     },
-  });
+  })) as ScheduleBlockRow[];
 
   // 8. Recursos activos
-  const resources = await tx.resource.findMany({
+  const resources = (await tx.resource.findMany({
     where: { businessId: input.businessId, isActive: true, archivedAt: null },
     orderBy: { displayOrder: 'asc' },
-  });
+  })) as ResourceRow[];
   if (!resources.length) return [];
 
   // 9. Citas existentes del día (todos los recursos, para calcular travel adyacente)
-  const existing = await tx.appointment.findMany({
+  const existing = (await tx.appointment.findMany({
     where: {
       businessId: input.businessId,
       status: { notIn: ['cancelled', 'no_show', 'draft', 'rescheduled'] },
       AND: [{ startsAt: { lt: endOfDayLocal } }, { endsAt: { gt: startOfDayLocal } }],
     },
     select: { id: true, startsAt: true, endsAt: true, resourceId: true, zoneId: true },
-  });
-  const byResource = new Map<string, typeof existing>();
+  })) as AppointmentRow[];
+  const byResource = new Map<string, AppointmentRow[]>();
   for (const a of existing) {
     const arr = byResource.get(a.resourceId) ?? [];
     arr.push(a);
@@ -158,9 +174,9 @@ export async function computeAvailability(
   }
 
   // 10. Travel times
-  const ttRows = await tx.zoneTravelTime.findMany({
+  const ttRows = (await tx.zoneTravelTime.findMany({
     where: { businessId: input.businessId },
-  });
+  })) as TravelTimeRow[];
   const travelFn = (fromZoneId: string, toZoneId: string): number => {
     if (fromZoneId === toZoneId) return 0;
     const tt = ttRows.find(

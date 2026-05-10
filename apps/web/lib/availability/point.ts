@@ -57,9 +57,15 @@ export async function checkPointAvailability(
   const dayOfWeek = dayDate.getUTCDay();
   const pointMin = minutesOfDay(time);
 
-  const exceptions = await tx.scheduleException.findMany({
+  // Defensive row types — keep this file independent of Prisma's generated
+  // row types in case they aren't fully available at build time.
+  type ExceptionRow = { kind: string; payload: unknown };
+  type ScheduleTemplateRow = { windowStart: Date; windowEnd: Date };
+  type BlockIdRow = { id: string };
+
+  const exceptions = (await tx.scheduleException.findMany({
     where: { businessId, exceptionDate: dayDate },
-  });
+  })) as ExceptionRow[];
 
   if (exceptions.some((e) => e.kind === 'closed')) {
     return { available: false, reason: 'closed', isoStartsAt };
@@ -75,9 +81,9 @@ export async function checkPointAvailability(
       endMin: minutesOfDay(w.end),
     }));
   } else {
-    const tpls = await tx.scheduleTemplate.findMany({
+    const tpls = (await tx.scheduleTemplate.findMany({
       where: { businessId, dayOfWeek, isActive: true, kind: 'work' },
-    });
+    })) as ScheduleTemplateRow[];
     windows = tpls.map((t) => ({
       startMin: minutesFromTime(t.windowStart),
       endMin: minutesFromTime(t.windowEnd),
@@ -88,9 +94,9 @@ export async function checkPointAvailability(
     return { available: false, reason: 'outside_hours', isoStartsAt };
   }
 
-  const breakRows = await tx.scheduleTemplate.findMany({
+  const breakRows = (await tx.scheduleTemplate.findMany({
     where: { businessId, dayOfWeek, isActive: true, kind: 'break' },
-  });
+  })) as ScheduleTemplateRow[];
   if (breakRows.some((b) => {
     const bs = minutesFromTime(b.windowStart);
     const be = minutesFromTime(b.windowEnd);
@@ -102,7 +108,7 @@ export async function checkPointAvailability(
   // schedule_block: any row whose [startsAt, endsAt) covers `startsAt`.
   // Match the engine's zone semantics: global blocks (zoneId IS NULL) always,
   // plus blocks for the chosen zone if one was provided.
-  const blocks = await tx.scheduleBlock.findMany({
+  const blocks = (await tx.scheduleBlock.findMany({
     where: {
       businessId,
       startsAt: { lte: startsAt },
@@ -110,7 +116,7 @@ export async function checkPointAvailability(
       OR: zoneId ? [{ zoneId: null }, { zoneId }] : [{ zoneId: null }],
     },
     select: { id: true },
-  });
+  })) as BlockIdRow[];
   if (blocks.length) {
     return { available: false, reason: 'in_block', isoStartsAt };
   }
