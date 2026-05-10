@@ -1,0 +1,16 @@
+node_modules
+.pnpm-store
+.next
+dist
+out
+coverage
+.turbo
+.env
+.env.local
+.env.*.local
+!.env.example
+*.log
+.DS_Store
+.vercel
+tsconfig.tsbuildinfo
+packages/db/prisma/generated

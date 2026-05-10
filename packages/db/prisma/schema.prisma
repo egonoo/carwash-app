@@ -1,0 +1,1099 @@
+// =============================================================================
+// Splash SaaS — Prisma schema
+// Corresponde 1:1 con docs/03-database-schema.sql.
+// RLS, triggers, EXCLUDE constraints y funciones se aplican con SQL separado
+// (ver packages/db/sql/*.sql — ejecutado por scripts/apply-sql.ts tras migrate).
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_MIGRATIONS")
+  extensions = [uuidOssp(map: "uuid-ossp"), pgcrypto, btree_gist, citext]
+}
+
+// ----------------------------------------------------------------------------
+// ENUMS
+// ----------------------------------------------------------------------------
+enum UserRole {
+  owner
+  admin
+  staff
+  readonly
+
+  @@map("user_role")
+}
+
+enum AddonPricingMode {
+  fixed
+  starting_at
+  per_unit
+  quote_on_site
+
+  @@map("addon_pricing_mode")
+}
+
+enum DepositPolicyType {
+  fixed
+  percentage
+
+  @@map("deposit_policy_type")
+}
+
+enum AppointmentStatus {
+  draft
+  pending_deposit
+  awaiting_zelle
+  confirmed
+  on_the_way
+  arrived
+  in_progress
+  completed
+  cancelled
+  no_show
+  rescheduled
+
+  @@map("appointment_status")
+}
+
+enum DepositStatus {
+  pending
+  awaiting_zelle
+  paid
+
+  @@map("deposit_status")
+}
+
+enum BalanceStatus {
+  unpaid
+  paid
+
+  @@map("balance_status")
+}
+
+enum AppointmentItemKind {
+  package
+  addon
+  manual_extra
+
+  @@map("appointment_item_kind")
+}
+
+enum PaymentKind {
+  deposit
+  final
+  refund
+  tip
+  extra
+
+  @@map("payment_kind")
+}
+
+enum PaymentMethod {
+  card_online
+  card_terminal
+  cash
+  zelle
+  venmo
+  cashapp
+  other
+
+  @@map("payment_method")
+}
+
+enum DiscountKind {
+  loyalty
+  promo
+  manual
+
+  @@map("discount_kind")
+}
+
+enum DiscountValueType {
+  percentage
+  fixed
+
+  @@map("discount_value_type")
+}
+
+enum EvidencePhase {
+  pre_service_customer
+  pre_service_admin
+  in_progress
+  post_service
+
+  @@map("evidence_phase")
+}
+
+enum NotificationChannel {
+  email
+  sms
+  push
+
+  @@map("notification_channel")
+}
+
+enum NotificationStatus {
+  queued
+  sent
+  failed
+  cancelled
+
+  @@map("notification_status")
+}
+
+enum AuditAction {
+  create
+  update
+  delete
+  state_change
+  grant
+  revoke
+  adjust
+
+  @@map("audit_action")
+}
+
+// ----------------------------------------------------------------------------
+// IDENTITY
+// ----------------------------------------------------------------------------
+model Business {
+  id                        String   @id @default(uuid()) @db.Uuid
+  slug                      String   @unique
+  name                      String
+  legalName                 String?  @map("legal_name")
+  email                     String   @db.Citext
+  phone                     String?
+  timezone                  String   @default("America/New_York")
+  currency                  String   @default("USD") @db.Char(3)
+  locale                    String   @default("en")
+  logoStorageKey            String?  @map("logo_storage_key")
+  brandColor                String?  @map("brand_color")
+  addressLine1              String?  @map("address_line1")
+  addressCity               String?  @map("address_city")
+  addressState              String?  @map("address_state")
+  addressZip                String?  @map("address_zip")
+  taxRateBps                Int      @default(0) @map("tax_rate_bps")
+  depositPolicyType         DepositPolicyType @default(fixed) @map("deposit_policy_type")
+  depositPolicyValue        Int      @default(2000) @map("deposit_policy_value")
+  depositMinCents           Int      @default(2000) @map("deposit_min_cents")
+  features                  Json     @default("{\"loyalty\":true,\"photos\":true,\"promo_codes\":true,\"multiple_resources\":false,\"custom_domain\":false,\"sms\":false,\"google_calendar\":true}")
+  defaultTravelTimeMin      Int      @default(20) @map("default_travel_time_min")
+  rescheduleMaxFree         Int      @default(1) @map("reschedule_max_free")
+  rescheduleMinHours        Int      @default(24) @map("reschedule_min_hours")
+  evidenceMinPhotos         Int      @default(1) @map("evidence_min_photos")
+  evidenceMaxPhotosCust     Int      @default(12) @map("evidence_max_photos_cust")
+  evidenceMaxPhotosAdmin    Int      @default(30) @map("evidence_max_photos_admin")
+  evidenceRetentionDays     Int      @default(730) @map("evidence_retention_days")
+  photoScrubExif            Boolean  @default(true) @map("photo_scrub_exif")
+  status                    String   @default("active")
+  plan                      String   @default("free")
+  stripeCustomerId          String?  @map("stripe_customer_id")
+  stripeAccountId           String?  @map("stripe_account_id")
+  stripeAccountReady        Boolean  @default(false) @map("stripe_account_ready")
+  stripeChargesEnabled      Boolean  @default(false) @map("stripe_charges_enabled")
+  stripeDetailsSubmitted    Boolean  @default(false) @map("stripe_details_submitted")
+  stripePayoutsEnabled      Boolean  @default(false) @map("stripe_payouts_enabled")
+  stripeDisabledReason      String?  @map("stripe_disabled_reason")
+  stripeRequirementsDue     String[] @default([]) @map("stripe_requirements_due")
+  googleCalendarId          String?  @map("google_calendar_id")
+  googleRefreshTokenEnc     String?  @map("google_refresh_token_enc")
+  googleCalendarEmail       String?  @map("google_calendar_email")
+  googleCalendarConnectedAt DateTime? @map("google_calendar_connected_at") @db.Timestamptz
+  createdAt                 DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt                 DateTime? @map("deleted_at") @db.Timestamptz
+
+  domains          BusinessDomain[]
+  users            UserBusinessRole[]
+  customers        Customer[]
+  vehicles         Vehicle[]
+  vehicleTypes     VehicleType[]
+  packages         Package[]
+  packagePrices    PackagePrice[]
+  addons           Addon[]
+  zones            Zone[]
+  zoneTravelTimes  ZoneTravelTime[]
+  promoCodes       PromoCode[]
+  scheduleTemplates ScheduleTemplate[]
+  scheduleTemplateZones ScheduleTemplateZone[]
+  scheduleExceptions ScheduleException[]
+  scheduleBlocks   ScheduleBlock[]
+  resources        Resource[]
+  loyaltyProgram   LoyaltyProgram?
+  loyaltyTiers     LoyaltyTier[]
+  loyaltyProgress  LoyaltyProgress[]
+  loyaltyRedemptions LoyaltyRedemption[]
+  loyaltyAdjustments LoyaltyAdjustment[]
+  appointments     Appointment[]
+  appointmentItems AppointmentItem[]
+  appointmentStatusHistory AppointmentStatusHistory[]
+  appliedDiscounts AppliedDiscount[]
+  evidencePhotos   EvidencePhoto[]
+  evidenceConsents EvidenceConsent[]
+  payments         Payment[]
+  receipts         Receipt[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  dataRequests     CustomerDataRequest[]
+
+  @@index([slug], map: "idx_business_slug")
+  @@map("business")
+}
+
+model BusinessDomain {
+  id          String   @id @default(uuid()) @db.Uuid
+  businessId  String   @map("business_id") @db.Uuid
+  host        String   @unique
+  verifiedAt  DateTime? @map("verified_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([host], map: "idx_business_domain_host")
+  @@map("business_domain")
+}
+
+model AppUser {
+  id               String   @id @default(uuid()) @db.Uuid
+  email            String   @unique @db.Citext
+  passwordHash     String?  @map("password_hash")
+  fullName         String?  @map("full_name")
+  phone            String?
+  avatarKey        String?  @map("avatar_key")
+  totpSecretEnc    String?  @map("totp_secret_enc")
+  totpEnabled      Boolean  @default(false) @map("totp_enabled")
+  lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz
+  emailVerifiedAt  DateTime? @map("email_verified_at") @db.Timestamptz
+  isSuperAdmin     Boolean  @default(false) @map("is_super_admin")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz
+
+  businessRoles        UserBusinessRole[]
+  createdAppointments  Appointment[]             @relation("createdByUser")
+  statusChanges        AppointmentStatusHistory[]
+  itemsCreated         AppointmentItem[]         @relation("createdByUser")
+  appliedDiscounts     AppliedDiscount[]
+  loyaltyGranted       LoyaltyRedemption[]       @relation("grantedByUser")
+  loyaltyRevoked       LoyaltyRedemption[]       @relation("revokedByUser")
+  loyaltyAdjustments   LoyaltyAdjustment[]
+  photosUploaded       EvidencePhoto[]           @relation("uploadedByUser")
+  photosDeleted        EvidencePhoto[]           @relation("deletedByUser")
+  payments             Payment[]
+  scheduleExceptions   ScheduleException[]
+  scheduleBlocks       ScheduleBlock[]
+  notifications        Notification[]
+  auditLogs            AuditLog[]                @relation("actorUser")
+
+  @@map("app_user")
+}
+
+model UserBusinessRole {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  role       UserRole
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user     AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+  @@index([businessId], map: "idx_ubr_business")
+  @@map("user_business_role")
+}
+
+model Customer {
+  id                 String   @id @default(uuid()) @db.Uuid
+  businessId         String   @map("business_id") @db.Uuid
+  email              String   @db.Citext
+  phoneE164          String   @map("phone_e164")
+  firstName          String   @map("first_name")
+  lastName           String?  @map("last_name")
+  preferredLocale    String?  @default("en") @map("preferred_locale")
+  marketingConsent   Boolean  @default(false) @map("marketing_consent")
+  blockedAt          DateTime? @map("blocked_at") @db.Timestamptz
+  blockReason        String?  @map("block_reason")
+  internalNotes      String?  @map("internal_notes")
+  addressLine1Enc    Bytes?   @map("address_line1_enc")
+  addressLine2Enc    Bytes?   @map("address_line2_enc")
+  addressCity        String?  @map("address_city")
+  addressState       String?  @map("address_state")
+  addressZip         String?  @map("address_zip")
+  addressLat         Float?   @map("address_lat")
+  addressLng         Float?   @map("address_lng")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz
+
+  business         Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  vehicles         Vehicle[]
+  appointments     Appointment[]
+  loyaltyProgress  LoyaltyProgress[]
+  loyaltyRedemptions LoyaltyRedemption[]
+  loyaltyAdjustments LoyaltyAdjustment[]
+  evidenceConsents EvidenceConsent[]
+  evidencePhotos   EvidencePhoto[]            @relation("evidenceCustomer")
+  evidenceUploads  EvidencePhoto[]            @relation("uploadedByCustomer")
+  notifications    Notification[]
+  dataRequests     CustomerDataRequest[]
+  auditLogs        AuditLog[]                 @relation("actorCustomer")
+
+  @@unique([businessId, email])
+  @@unique([businessId, phoneE164])
+  @@index([businessId], map: "idx_customer_business")
+  @@map("customer")
+}
+
+model Vehicle {
+  id             String   @id @default(uuid()) @db.Uuid
+  businessId     String   @map("business_id") @db.Uuid
+  customerId     String   @map("customer_id") @db.Uuid
+  vehicleTypeId  String   @map("vehicle_type_id") @db.Uuid
+  internalCode   String   @map("internal_code")
+  vin            String?
+  plate          String?
+  plateState     String?  @map("plate_state")
+  make           String?
+  model          String?
+  year           Int?
+  color          String?
+  nickname       String?
+  notes          String?
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  vehicleType VehicleType @relation(fields: [vehicleTypeId], references: [id])
+  loyaltyProgress    LoyaltyProgress?
+  loyaltyRedemptions LoyaltyRedemption[]
+  loyaltyAdjustments LoyaltyAdjustment[]
+  appointments       Appointment[]
+  evidencePhotos     EvidencePhoto[]
+
+  @@unique([businessId, internalCode], map: "idx_vehicle_code")
+  @@index([businessId, customerId], map: "idx_vehicle_customer")
+  @@map("vehicle")
+}
+
+// ----------------------------------------------------------------------------
+// CATALOG
+// ----------------------------------------------------------------------------
+model VehicleType {
+  id           String   @id @default(uuid()) @db.Uuid
+  businessId   String   @map("business_id") @db.Uuid
+  name         String
+  slug         String
+  description  String?
+  examples     String?
+  displayOrder Int      @default(0) @map("display_order")
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  business      Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  vehicles      Vehicle[]
+  packagePrices PackagePrice[]
+
+  @@unique([businessId, slug])
+  @@map("vehicle_type")
+}
+
+model Package {
+  id                  String   @id @default(uuid()) @db.Uuid
+  businessId          String   @map("business_id") @db.Uuid
+  name                String
+  slug                String
+  description         String?
+  shortBenefits       Json?    @map("short_benefits")
+  imageKey            String?  @map("image_key")
+  displayOrder        Int      @default(0) @map("display_order")
+  isActive            Boolean  @default(true) @map("is_active")
+  depositPolicyType   DepositPolicyType? @map("deposit_policy_type")
+  depositPolicyValue  Int?     @map("deposit_policy_value")
+  depositMinCents     Int?     @map("deposit_min_cents")
+  archivedAt          DateTime? @map("archived_at") @db.Timestamptz
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  prices   PackagePrice[]
+
+  @@unique([businessId, slug])
+  @@map("package")
+}
+
+model PackagePrice {
+  packageId       String   @map("package_id") @db.Uuid
+  vehicleTypeId   String   @map("vehicle_type_id") @db.Uuid
+  businessId      String   @map("business_id") @db.Uuid
+  priceCents      Int      @map("price_cents")
+  durationMinutes Int      @map("duration_minutes")
+  isAvailable     Boolean  @default(true) @map("is_available")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  package     Package     @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  vehicleType VehicleType @relation(fields: [vehicleTypeId], references: [id], onDelete: Cascade)
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([packageId, vehicleTypeId])
+  @@index([businessId], map: "idx_package_price_business")
+  @@map("package_price")
+}
+
+model Addon {
+  id                   String   @id @default(uuid()) @db.Uuid
+  businessId           String   @map("business_id") @db.Uuid
+  name                 String
+  slug                 String
+  description          String?
+  pricingMode          AddonPricingMode @map("pricing_mode")
+  basePriceCents       Int      @default(0) @map("base_price_cents")
+  durationMinutes      Int      @default(0) @map("duration_minutes")
+  defaultQuantity      Int      @default(1) @map("default_quantity")
+  maxQuantity          Int      @default(10) @map("max_quantity")
+  requiresAdminQuote   Boolean  @default(false) @map("requires_admin_quote")
+  displayOrder         Int      @default(0) @map("display_order")
+  isActive             Boolean  @default(true) @map("is_active")
+  imageKey             String?  @map("image_key")
+  archivedAt           DateTime? @map("archived_at") @db.Timestamptz
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, slug])
+  @@map("addon")
+}
+
+model Zone {
+  id           String   @id @default(uuid()) @db.Uuid
+  businessId   String   @map("business_id") @db.Uuid
+  name         String
+  slug         String
+  color        String?
+  description  String?
+  zipCodes     String[] @map("zip_codes")
+  geojson      Json?
+  displayOrder Int      @default(0) @map("display_order")
+  isActive     Boolean  @default(true) @map("is_active")
+  travelTimeMinutes Int?   @map("travel_time_minutes")
+  extraFeeCents     Int    @default(0) @map("extra_fee_cents")
+  maxConcurrentJobs Int    @default(1) @map("max_concurrent_jobs")
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  business        Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  travelTimesFrom ZoneTravelTime[] @relation("fromZone")
+  travelTimesTo   ZoneTravelTime[] @relation("toZone")
+  scheduleTemplateZones ScheduleTemplateZone[]
+  scheduleBlocks  ScheduleBlock[]
+  appointments    Appointment[]
+
+  @@unique([businessId, slug])
+  @@map("zone")
+}
+
+model ZoneTravelTime {
+  businessId  String @map("business_id") @db.Uuid
+  fromZoneId  String @map("from_zone_id") @db.Uuid
+  toZoneId    String @map("to_zone_id") @db.Uuid
+  minutes     Int
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  fromZone Zone     @relation("fromZone", fields: [fromZoneId], references: [id], onDelete: Cascade)
+  toZone   Zone     @relation("toZone", fields: [toZoneId], references: [id], onDelete: Cascade)
+
+  @@id([fromZoneId, toZoneId])
+  @@index([businessId], map: "idx_ztt_business")
+  @@map("zone_travel_time")
+}
+
+model PromoCode {
+  id                   String   @id @default(uuid()) @db.Uuid
+  businessId           String   @map("business_id") @db.Uuid
+  code                 String
+  description          String?
+  discountType         DiscountValueType @map("discount_type")
+  discountValue        Int      @map("discount_value")
+  appliesToPackageIds  String[] @default([]) @map("applies_to_package_ids") @db.Uuid
+  appliesToAddons      Boolean  @default(false) @map("applies_to_addons")
+  minSubtotalCents     Int      @default(0) @map("min_subtotal_cents")
+  maxUsesTotal         Int?     @map("max_uses_total")
+  maxUsesPerCustomer   Int      @default(1) @map("max_uses_per_customer")
+  usesCount            Int      @default(0) @map("uses_count")
+  activeFrom           DateTime @default(now()) @map("active_from") @db.Timestamptz
+  activeUntil          DateTime? @map("active_until") @db.Timestamptz
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  archivedAt           DateTime? @map("archived_at") @db.Timestamptz
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("promo_code")
+}
+
+// ----------------------------------------------------------------------------
+// SCHEDULING
+// ----------------------------------------------------------------------------
+model ScheduleTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  businessId  String   @map("business_id") @db.Uuid
+  dayOfWeek   Int      @map("day_of_week")
+  windowStart DateTime @map("window_start") @db.Time
+  windowEnd   DateTime @map("window_end") @db.Time
+  kind        String   @default("work")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, dayOfWeek], map: "idx_schedule_template_business")
+  @@index([businessId, kind, dayOfWeek], map: "idx_schedule_template_kind")
+  @@map("schedule_template")
+}
+
+model ScheduleTemplateZone {
+  id         String   @id @default(uuid()) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  dayOfWeek  Int      @map("day_of_week")
+  zoneId     String   @map("zone_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  zone     Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, dayOfWeek, zoneId])
+  @@map("schedule_template_zone")
+}
+
+model ScheduleException {
+  id            String   @id @default(uuid()) @db.Uuid
+  businessId    String   @map("business_id") @db.Uuid
+  exceptionDate DateTime @map("exception_date") @db.Date
+  kind          String
+  payload       Json     @default("{}")
+  note          String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy     String?  @map("created_by") @db.Uuid
+
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdByUser AppUser? @relation(fields: [createdBy], references: [id])
+
+  @@unique([businessId, exceptionDate, kind])
+  @@map("schedule_exception")
+}
+
+model ScheduleBlock {
+  id         String   @id @default(uuid()) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  startsAt   DateTime @map("starts_at") @db.Timestamptz
+  endsAt     DateTime @map("ends_at") @db.Timestamptz
+  reason     String?
+  zoneId     String?  @map("zone_id") @db.Uuid
+  resourceId String?  @map("resource_id") @db.Uuid
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  zone          Zone?     @relation(fields: [zoneId], references: [id])
+  resource      Resource? @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  createdByUser AppUser?  @relation(fields: [createdBy], references: [id])
+
+  @@index([businessId, startsAt, endsAt], map: "idx_schedule_block_range")
+  @@map("schedule_block")
+}
+
+model Resource {
+  id           String   @id @default(uuid()) @db.Uuid
+  businessId   String   @map("business_id") @db.Uuid
+  name         String
+  color        String?
+  isActive     Boolean  @default(true) @map("is_active")
+  displayOrder Int      @default(0) @map("display_order")
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  scheduleBlocks ScheduleBlock[]
+  appointments   Appointment[]
+
+  @@map("resource")
+}
+
+// ----------------------------------------------------------------------------
+// LOYALTY
+// ----------------------------------------------------------------------------
+model LoyaltyProgram {
+  id                 String   @id @default(uuid()) @db.Uuid
+  businessId         String   @unique @map("business_id") @db.Uuid
+  isActive           Boolean  @default(false) @map("is_active")
+  appliesToAddons    Boolean  @default(false) @map("applies_to_addons")
+  countPackagesOnly  Boolean  @default(true) @map("count_packages_only")
+  resetOnRedemption  Boolean  @default(false) @map("reset_on_redemption")
+  autoApply          Boolean  @default(true) @map("auto_apply")
+  name               String?  @default("Loyalty Rewards")
+  description        String?
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  tiers    LoyaltyTier[]
+
+  @@map("loyalty_program")
+}
+
+model LoyaltyTier {
+  id                         String   @id @default(uuid()) @db.Uuid
+  programId                  String   @map("program_id") @db.Uuid
+  businessId                 String   @map("business_id") @db.Uuid
+  displayOrder               Int      @default(0) @map("display_order")
+  name                       String?
+  visitsRequired             Int      @map("visits_required")
+  discountType               DiscountValueType @map("discount_type")
+  discountValue              Int      @map("discount_value")
+  appliesToPackageIds        String[] @default([]) @map("applies_to_package_ids") @db.Uuid
+  maxRedemptionsPerVehicle   Int      @default(1) @map("max_redemptions_per_vehicle")
+  isActive                   Boolean  @default(true) @map("is_active")
+  createdAt                  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  program     LoyaltyProgram      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  business    Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  redemptions LoyaltyRedemption[]
+
+  @@index([programId, visitsRequired], map: "idx_loyalty_tier_program")
+  @@map("loyalty_tier")
+}
+
+model LoyaltyProgress {
+  id                          String   @id @default(uuid()) @db.Uuid
+  businessId                  String   @map("business_id") @db.Uuid
+  vehicleId                   String   @unique @map("vehicle_id") @db.Uuid
+  customerId                  String   @map("customer_id") @db.Uuid
+  completedVisits             Int      @default(0) @map("completed_visits")
+  lastCompletedAppointmentId  String?  @map("last_completed_appointment_id") @db.Uuid
+  firstServiceAt              DateTime? @map("first_service_at") @db.Timestamptz
+  lastServiceAt               DateTime? @map("last_service_at") @db.Timestamptz
+  lifetimeRevenueCents        BigInt   @default(0) @map("lifetime_revenue_cents")
+  updatedAt                   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  vehicle  Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  lastCompletedAppointment Appointment? @relation("lpLastAppt", fields: [lastCompletedAppointmentId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, customerId], map: "idx_loyalty_progress_business_customer")
+  @@map("loyalty_progress")
+}
+
+model LoyaltyAdjustment {
+  id               String   @id @default(uuid()) @db.Uuid
+  businessId       String   @map("business_id") @db.Uuid
+  vehicleId        String   @map("vehicle_id") @db.Uuid
+  customerId       String   @map("customer_id") @db.Uuid
+  delta            Int
+  reason           String
+  beforeCount      Int      @map("before_count")
+  afterCount       Int      @map("after_count")
+  adjustedByUserId String   @map("adjusted_by_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  adjustedByUser AppUser  @relation(fields: [adjustedByUserId], references: [id])
+
+  @@index([businessId, vehicleId, createdAt], map: "idx_loyalty_adj_vehicle")
+  @@map("loyalty_adjustment")
+}
+
+model LoyaltyRedemption {
+  id                         String   @id @default(uuid()) @db.Uuid
+  businessId                 String   @map("business_id") @db.Uuid
+  appointmentId              String   @map("appointment_id") @db.Uuid
+  vehicleId                  String   @map("vehicle_id") @db.Uuid
+  customerId                 String   @map("customer_id") @db.Uuid
+  tierId                     String?  @map("tier_id") @db.Uuid
+  tierSnapshot               Json     @map("tier_snapshot")
+  visitCountAtRedemption     Int      @map("visit_count_at_redemption")
+  discountType               DiscountValueType @map("discount_type")
+  discountValue              Int      @map("discount_value")
+  discountAppliedCents       Int      @map("discount_applied_cents")
+  grantedManually            Boolean  @default(false) @map("granted_manually")
+  grantedByUserId            String?  @map("granted_by_user_id") @db.Uuid
+  revokedAt                  DateTime? @map("revoked_at") @db.Timestamptz
+  revokedByUserId            String?  @map("revoked_by_user_id") @db.Uuid
+  revokeReason               String?  @map("revoke_reason")
+  createdAt                  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business       Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment    Appointment  @relation("redemptionAppointment", fields: [appointmentId], references: [id], onDelete: Cascade)
+  vehicle        Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tier           LoyaltyTier? @relation(fields: [tierId], references: [id])
+  grantedByUser  AppUser?     @relation("grantedByUser", fields: [grantedByUserId], references: [id])
+  revokedByUser  AppUser?     @relation("revokedByUser", fields: [revokedByUserId], references: [id])
+
+  @@unique([appointmentId, tierId])
+  @@index([businessId, vehicleId, createdAt], map: "idx_redemption_vehicle")
+  @@index([tierId], map: "idx_redemption_tier")
+  @@map("loyalty_redemption")
+}
+
+// ----------------------------------------------------------------------------
+// OPERATIONS
+// ----------------------------------------------------------------------------
+model Appointment {
+  id                              String   @id @default(uuid()) @db.Uuid
+  businessId                      String   @map("business_id") @db.Uuid
+  customerId                      String   @map("customer_id") @db.Uuid
+  vehicleId                       String   @map("vehicle_id") @db.Uuid
+  zoneId                          String   @map("zone_id") @db.Uuid
+  resourceId                      String   @map("resource_id") @db.Uuid
+  startsAt                        DateTime @map("starts_at") @db.Timestamptz
+  endsAt                          DateTime @map("ends_at") @db.Timestamptz
+  durationMinutes                 Int      @map("duration_minutes")
+  status                          AppointmentStatus @default(draft)
+  cancellationReason              String?  @map("cancellation_reason")
+  noShowReason                    String?  @map("no_show_reason")
+  rescheduleCount                 Int      @default(0) @map("reschedule_count")
+  previousAppointmentId           String?  @map("previous_appointment_id") @db.Uuid
+  serviceAddressLine1Enc          Bytes?   @map("service_address_line1_enc")
+  serviceAddressLine2Enc          Bytes?   @map("service_address_line2_enc")
+  serviceAddressCity              String?  @map("service_address_city")
+  serviceAddressState             String?  @map("service_address_state")
+  serviceAddressZip               String?  @map("service_address_zip")
+  serviceAddressLat               Float?   @map("service_address_lat")
+  serviceAddressLng               Float?   @map("service_address_lng")
+  serviceAddressPlaceId           String?  @map("service_address_place_id")
+  customerInstructions            String?  @map("customer_instructions")
+  internalNotes                   String?  @map("internal_notes")
+  subtotalCents                   Int      @default(0) @map("subtotal_cents")
+  discountTotalCents              Int      @default(0) @map("discount_total_cents")
+  taxCents                        Int      @default(0) @map("tax_cents")
+  totalCents                      Int      @default(0) @map("total_cents")
+  depositPolicyTypeSnapshot       DepositPolicyType @map("deposit_policy_type_snapshot")
+  depositPolicyValueSnapshot      Int      @map("deposit_policy_value_snapshot")
+  depositAmountCents              Int      @default(0) @map("deposit_amount_cents")
+  depositPaidCents                Int      @default(0) @map("deposit_paid_cents")
+  depositPaidAt                   DateTime? @map("deposit_paid_at") @db.Timestamptz
+  depositStripePaymentIntentId    String?  @unique @map("deposit_stripe_payment_intent_id")
+  depositStatus                   DepositStatus @default(pending) @map("deposit_status")
+  depositMethod                   PaymentMethod? @map("deposit_method")
+  balanceDueCents                 Int      @default(0) @map("balance_due_cents")
+  balanceStatus                   BalanceStatus @default(unpaid) @map("balance_status")
+  balanceMethod                   PaymentMethod? @map("balance_method")
+  balancePaidAt                   DateTime? @map("balance_paid_at") @db.Timestamptz
+  evidencePhotoCount              Int      @default(0) @map("evidence_photo_count")
+  loyaltyRedemptionId             String?  @map("loyalty_redemption_id") @db.Uuid
+  confirmedAt                     DateTime? @map("confirmed_at") @db.Timestamptz
+  onTheWayAt                      DateTime? @map("on_the_way_at") @db.Timestamptz
+  arrivedAt                       DateTime? @map("arrived_at") @db.Timestamptz
+  startedAt                       DateTime? @map("started_at") @db.Timestamptz
+  completedAt                     DateTime? @map("completed_at") @db.Timestamptz
+  cancelledAt                     DateTime? @map("cancelled_at") @db.Timestamptz
+  noShowAt                        DateTime? @map("no_show_at") @db.Timestamptz
+  idempotencyKey                  String?  @unique @map("idempotency_key")
+  manageTokenHash                 String?  @map("manage_token_hash")
+  source                          String   @default("web")
+  createdAt                       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdByUserId                 String?  @map("created_by_user_id") @db.Uuid
+  updatedAt                       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer      Customer @relation(fields: [customerId], references: [id])
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id])
+  zone          Zone     @relation(fields: [zoneId], references: [id])
+  resource      Resource @relation(fields: [resourceId], references: [id])
+  previous      Appointment? @relation("rescheduleChain", fields: [previousAppointmentId], references: [id])
+  rescheduledTo Appointment[] @relation("rescheduleChain")
+  createdByUser AppUser? @relation("createdByUser", fields: [createdByUserId], references: [id])
+
+  items            AppointmentItem[]
+  statusHistory    AppointmentStatusHistory[]
+  appliedDiscounts AppliedDiscount[]
+  payments         Payment[]
+  evidencePhotos   EvidencePhoto[]
+  evidenceConsent  EvidenceConsent?
+  receipt          Receipt?
+  notifications    Notification[]
+  redemptions      LoyaltyRedemption[] @relation("redemptionAppointment")
+  loyaltyProgressAsLast LoyaltyProgress[] @relation("lpLastAppt")
+
+  @@index([businessId, startsAt], map: "idx_appointment_business_date")
+  @@index([businessId, status, startsAt], map: "idx_appointment_status")
+  @@index([businessId, customerId, startsAt(sort: Desc)], map: "idx_appointment_customer")
+  @@index([businessId, vehicleId, startsAt(sort: Desc)], map: "idx_appointment_vehicle")
+  @@index([businessId, resourceId, startsAt], map: "idx_appointment_resource_day")
+  @@map("appointment")
+}
+
+model AppointmentItem {
+  id                    String   @id @default(uuid()) @db.Uuid
+  businessId            String   @map("business_id") @db.Uuid
+  appointmentId         String   @map("appointment_id") @db.Uuid
+  kind                  AppointmentItemKind
+  refId                 String?  @map("ref_id") @db.Uuid
+  nameSnapshot          String   @map("name_snapshot")
+  descriptionSnapshot   String?  @map("description_snapshot")
+  pricingModeSnapshot   AddonPricingMode? @map("pricing_mode_snapshot")
+  unitPriceCents        Int      @map("unit_price_cents")
+  quantity              Int      @default(1)
+  lineTotalCents        Int      @map("line_total_cents")
+  durationMinutes       Int      @default(0) @map("duration_minutes")
+  pricingNotes          String?  @map("pricing_notes")
+  requiresAdminQuote    Boolean  @default(false) @map("requires_admin_quote")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdByUserId       String?  @map("created_by_user_id") @db.Uuid
+  displayOrder          Int      @default(0) @map("display_order")
+
+  business      Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  createdByUser AppUser?    @relation("createdByUser", fields: [createdByUserId], references: [id])
+
+  @@index([appointmentId], map: "idx_item_appointment")
+  @@map("appointment_item")
+}
+
+model AppointmentStatusHistory {
+  id               String   @id @default(uuid()) @db.Uuid
+  businessId       String   @map("business_id") @db.Uuid
+  appointmentId    String   @map("appointment_id") @db.Uuid
+  fromStatus       AppointmentStatus? @map("from_status")
+  toStatus         AppointmentStatus  @map("to_status")
+  changedAt        DateTime @default(now()) @map("changed_at") @db.Timestamptz
+  changedByUserId  String?  @map("changed_by_user_id") @db.Uuid
+  reason           String?
+
+  business       Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment    Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  changedByUser  AppUser?    @relation(fields: [changedByUserId], references: [id])
+
+  @@index([appointmentId, changedAt], map: "idx_ash_appt")
+  @@map("appointment_status_history")
+}
+
+model AppliedDiscount {
+  id               String   @id @default(uuid()) @db.Uuid
+  businessId       String   @map("business_id") @db.Uuid
+  appointmentId    String   @map("appointment_id") @db.Uuid
+  kind             DiscountKind
+  sourceId         String?  @map("source_id") @db.Uuid
+  label            String
+  discountType     DiscountValueType @map("discount_type")
+  discountValue    Int      @map("discount_value")
+  amountCents      Int      @map("amount_cents")
+  snapshot         Json
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdByUserId  String?  @map("created_by_user_id") @db.Uuid
+
+  business       Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment    Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  createdByUser  AppUser?    @relation(fields: [createdByUserId], references: [id])
+
+  @@index([appointmentId], map: "idx_applied_discount_appt")
+  @@map("applied_discount")
+}
+
+model EvidencePhoto {
+  id                         String   @id @default(uuid()) @db.Uuid
+  businessId                 String   @map("business_id") @db.Uuid
+  appointmentId              String   @map("appointment_id") @db.Uuid
+  customerId                 String   @map("customer_id") @db.Uuid
+  vehicleId                  String   @map("vehicle_id") @db.Uuid
+  phase                      EvidencePhase
+  slotTag                    String?  @map("slot_tag")
+  note                       String?
+  storageBucket              String   @default("splash-evidence") @map("storage_bucket")
+  storageKey                 String   @map("storage_key")
+  thumbKey                   String?  @map("thumb_key")
+  mimeType                   String   @map("mime_type")
+  bytes                      Int
+  width                      Int?
+  height                     Int?
+  exifScrubbed               Boolean  @default(true) @map("exif_scrubbed")
+  scanStatus                 String   @default("pending") @map("scan_status")
+  scanResult                 String?  @map("scan_result")
+  marketingConsent           Boolean  @default(false) @map("marketing_consent")
+  marketingConsentGivenAt    DateTime? @map("marketing_consent_given_at") @db.Timestamptz
+  marketingConsentRevokedAt  DateTime? @map("marketing_consent_revoked_at") @db.Timestamptz
+  uploadedByUserId           String?  @map("uploaded_by_user_id") @db.Uuid
+  uploadedByCustomerId       String?  @map("uploaded_by_customer_id") @db.Uuid
+  uploadedAt                 DateTime @default(now()) @map("uploaded_at") @db.Timestamptz
+  softDeletedAt              DateTime? @map("soft_deleted_at") @db.Timestamptz
+  softDeletedByUserId        String?  @map("soft_deleted_by_user_id") @db.Uuid
+
+  business              Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment           Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  customer              Customer     @relation("evidenceCustomer", fields: [customerId], references: [id])
+  vehicle               Vehicle      @relation(fields: [vehicleId], references: [id])
+  uploadedByUser        AppUser?     @relation("uploadedByUser", fields: [uploadedByUserId], references: [id])
+  uploadedByCustomer    Customer?    @relation("uploadedByCustomer", fields: [uploadedByCustomerId], references: [id])
+  softDeletedByUser     AppUser?     @relation("deletedByUser", fields: [softDeletedByUserId], references: [id])
+
+  @@index([appointmentId, phase], map: "idx_evidence_appt_phase")
+  @@index([businessId, vehicleId, uploadedAt(sort: Desc)], map: "idx_evidence_vehicle")
+  @@index([businessId, uploadedAt(sort: Desc)], map: "idx_evidence_business_date")
+  @@map("evidence_photo")
+}
+
+model EvidenceConsent {
+  id                              String   @id @default(uuid()) @db.Uuid
+  businessId                      String   @map("business_id") @db.Uuid
+  appointmentId                   String   @unique @map("appointment_id") @db.Uuid
+  customerId                      String   @map("customer_id") @db.Uuid
+  currentStateAccepted            Boolean  @map("current_state_accepted")
+  currentStateTextVersion         String   @map("current_state_text_version")
+  currentStateAcceptedAt          DateTime @map("current_state_accepted_at") @db.Timestamptz
+  nonRefundableDepositAccepted    Boolean  @map("non_refundable_deposit_accepted")
+  nonRefundableTextVersion        String   @map("non_refundable_text_version")
+  nonRefundableAcceptedAt         DateTime @map("non_refundable_accepted_at") @db.Timestamptz
+  marketingUseConsent             Boolean  @default(false) @map("marketing_use_consent")
+  marketingTextVersion            String?  @map("marketing_text_version")
+  marketingAcceptedAt             DateTime? @map("marketing_accepted_at") @db.Timestamptz
+  marketingRevokedAt              DateTime? @map("marketing_revoked_at") @db.Timestamptz
+  signedIp                        String?  @map("signed_ip") @db.Inet
+  signedUserAgent                 String?  @map("signed_user_agent")
+  createdAt                       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  customer    Customer    @relation(fields: [customerId], references: [id])
+
+  @@map("evidence_consent")
+}
+
+// ----------------------------------------------------------------------------
+// FINANCIAL
+// ----------------------------------------------------------------------------
+model Payment {
+  id                        String   @id @default(uuid()) @db.Uuid
+  businessId                String   @map("business_id") @db.Uuid
+  appointmentId             String   @map("appointment_id") @db.Uuid
+  kind                      PaymentKind
+  method                    PaymentMethod
+  amountCents               Int      @map("amount_cents")
+  currency                  String   @default("USD") @db.Char(3)
+  processedAt               DateTime @default(now()) @map("processed_at") @db.Timestamptz
+  receivedByUserId          String?  @map("received_by_user_id") @db.Uuid
+  stripePaymentIntentId     String?  @map("stripe_payment_intent_id")
+  stripeChargeId            String?  @map("stripe_charge_id")
+  stripeRefundId            String?  @map("stripe_refund_id")
+  stripeFeeCents            Int?     @map("stripe_fee_cents")
+  externalReference         String?  @map("external_reference")
+  notes                     String?
+  createdAt                 DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business         Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment      Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  receivedByUser   AppUser?    @relation(fields: [receivedByUserId], references: [id])
+
+  @@index([appointmentId], map: "idx_payment_appt")
+  @@map("payment")
+}
+
+model Receipt {
+  id            String   @id @default(uuid()) @db.Uuid
+  businessId    String   @map("business_id") @db.Uuid
+  appointmentId String   @unique @map("appointment_id") @db.Uuid
+  number        String
+  issuedAt      DateTime @default(now()) @map("issued_at") @db.Timestamptz
+  totalCents    Int      @map("total_cents")
+  pdfKey        String?  @map("pdf_key")
+  thermalText   String?  @map("thermal_text")
+  qrToken       String   @map("qr_token")
+  emailedAt     DateTime? @map("emailed_at") @db.Timestamptz
+  printedAt     DateTime? @map("printed_at") @db.Timestamptz
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, number])
+  @@map("receipt")
+}
+
+// ----------------------------------------------------------------------------
+// SYSTEM
+// ----------------------------------------------------------------------------
+model Notification {
+  id                  String   @id @default(uuid()) @db.Uuid
+  businessId          String   @map("business_id") @db.Uuid
+  appointmentId       String?  @map("appointment_id") @db.Uuid
+  customerId          String?  @map("customer_id") @db.Uuid
+  userId              String?  @map("user_id") @db.Uuid
+  channel             NotificationChannel
+  template            String
+  status              NotificationStatus @default(queued)
+  scheduledAt         DateTime @default(now()) @map("scheduled_at") @db.Timestamptz
+  sentAt              DateTime? @map("sent_at") @db.Timestamptz
+  failedAt            DateTime? @map("failed_at") @db.Timestamptz
+  error               String?
+  externalProvider    String?  @map("external_provider")
+  externalId          String?  @map("external_id")
+  qstashScheduleId    String?  @map("qstash_schedule_id")
+  payload             Json?
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  user        AppUser?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId], map: "idx_notification_appt")
+  @@index([status, scheduledAt], map: "idx_notification_scheduled")
+  @@map("notification")
+}
+
+model AuditLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  businessId        String   @map("business_id") @db.Uuid
+  actorUserId       String?  @map("actor_user_id") @db.Uuid
+  actorCustomerId   String?  @map("actor_customer_id") @db.Uuid
+  actorType         String   @map("actor_type")
+  action            AuditAction
+  entityType        String   @map("entity_type")
+  entityId          String   @map("entity_id") @db.Uuid
+  diff              Json?
+  metadata          Json?
+  ip                String?  @db.Inet
+  userAgent         String?  @map("user_agent")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actorUser      AppUser?  @relation("actorUser", fields: [actorUserId], references: [id])
+  actorCustomer  Customer? @relation("actorCustomer", fields: [actorCustomerId], references: [id])
+
+  @@index([businessId, entityType, entityId, createdAt], map: "idx_audit_entity")
+  @@index([businessId, actorUserId, createdAt], map: "idx_audit_actor")
+  @@map("audit_log")
+}
+
+model CustomerDataRequest {
+  id            String   @id @default(uuid()) @db.Uuid
+  businessId    String   @map("business_id") @db.Uuid
+  customerId    String   @map("customer_id") @db.Uuid
+  kind          String
+  status        String   @default("pending")
+  requestedAt   DateTime @default(now()) @map("requested_at") @db.Timestamptz
+  processedAt   DateTime? @map("processed_at") @db.Timestamptz
+  downloadKey   String?  @map("download_key")
+  notes         String?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@map("customer_data_request")
+}

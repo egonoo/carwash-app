@@ -1,0 +1,32 @@
+{
+  "name": "splash",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.10"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @splash/web dev",
+    "build": "pnpm -r build",
+    "start": "pnpm --filter @splash/web start",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @splash/web test:e2e",
+    "db:migrate": "pnpm --filter @splash/db migrate",
+    "db:deploy": "pnpm --filter @splash/db deploy",
+    "db:seed": "pnpm --filter @splash/db seed",
+    "db:studio": "pnpm --filter @splash/db studio",
+    "db:reset": "pnpm --filter @splash/db reset",
+    "db:apply-sql": "pnpm --filter @splash/db apply-sql",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,sql}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,sql}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "prettier-plugin-tailwindcss": "^0.6.8",
+    "prisma": "^5.22.0",
+    "typescript": "^5.6.3"
+  }
+}

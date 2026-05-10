@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(command -v pnpm)",
+      "Bash(command -v npm)",
+      "Bash(grep -E '^\\(node|npm|pnpm|yarn|bun\\)$')",
+      "Read(//opt/homebrew/**)",
+      "Read(//Users/la/.nvm/versions/**)",
+      "Bash([ -f \"/Users/la/Downloads/Saas car wash/apps/web/app/\\(admin\\)/$dir/page.tsx\" ])",
+      "Bash(pnpm typecheck *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/booking/detect-zone -H 'content-type: application/json' -d '{\"businessId\":\"00000000-0000-0000-0000-000000000000\",\"zip\":\"33101\"}' -w '\\\\nstatus=%{http_code}\\\\n')",
+      "Bash(curl -s -X POST http://localhost:3000/api/booking/detect-zone -H 'content-type: application/json' -d '{\"businessId\":\"00000000-0000-0000-0000-000000000000\",\"zip\":\"\"}' -w '\\\\nstatus=%{http_code}\\\\n')"
+    ]
+  }
+}
