@@ -48,9 +48,10 @@ export async function updateAppointmentStatus(
       where: { id: parsed.appointmentId },
     });
 
-    const allowed = TRANSITIONS[appt.status] ?? [];
+    const currentStatus = appt.status as AppointmentStatus;
+    const allowed = TRANSITIONS[currentStatus] ?? [];
     if (!allowed.includes(parsed.newStatus) && !session.isSuperAdmin) {
-      throw errs.invalidTransition(appt.status, parsed.newStatus);
+      throw errs.invalidTransition(currentStatus, parsed.newStatus);
     }
 
     const now = new Date();
