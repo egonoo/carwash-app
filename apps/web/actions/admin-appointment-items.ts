@@ -1,6 +1,5 @@
 'use server';
 
-import { AppointmentItemKind } from '@splash/db';
 import { z } from 'zod';
 import { requireRole } from '@/lib/auth';
 import { audit } from '@/lib/audit';
@@ -68,10 +67,10 @@ export async function setAppointmentItems(
           appointmentId: appt.id,
           kind:
             li.kind === 'package'
-              ? AppointmentItemKind.package
+              ? 'package'
               : li.kind === 'addon'
-                ? AppointmentItemKind.addon
-                : AppointmentItemKind.manual_extra,
+                ? 'addon'
+                : 'manual_extra',
           refId: li.refId,
           nameSnapshot: li.name,
           descriptionSnapshot: li.description ?? null,
