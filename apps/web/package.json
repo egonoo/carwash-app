@@ -13,8 +13,6 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@splash/db": "workspace:*",
-    "@splash/schemas": "workspace:*",
     "@aws-sdk/client-s3": "^3.675.0",
     "@aws-sdk/s3-request-presigner": "^3.675.0",
     "@hookform/resolvers": "^3.9.0",
@@ -27,6 +25,8 @@
     "@radix-ui/react-slot": "^1.1.0",
     "@radix-ui/react-tabs": "^1.1.1",
     "@radix-ui/react-toast": "^1.2.2",
+    "@splash/db": "workspace:*",
+    "@splash/schemas": "workspace:*",
     "@stripe/react-stripe-js": "^2.9.0",
     "@stripe/stripe-js": "^4.10.0",
     "@upstash/qstash": "^2.7.17",
@@ -37,6 +37,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
+    "framer-motion": "^12.38.0",
     "jose": "^5.9.6",
     "lucide-react": "^0.453.0",
     "next": "^15.0.3",
