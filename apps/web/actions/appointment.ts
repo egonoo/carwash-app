@@ -188,13 +188,27 @@ export async function addManualExtra(
   });
 }
 
+// Subset of the appointment_item row used by recomputePricingForAppointment.
+// Defined locally so the build does not depend on Prisma's generated row
+// types (which on Vercel resolve as `any` for this model).
+type AppointmentItemRow = {
+  kind: 'package' | 'addon' | 'manual_extra';
+  refId: string | null;
+  quantity: number;
+  nameSnapshot: string;
+  unitPriceCents: number;
+  durationMinutes: number;
+};
+
 export async function recomputePricingForAppointment(
   appointmentId: string,
 ): Promise<{ ok: true }> {
   const session = await requireRole(['owner', 'admin', 'staff']);
   return withTenant(session.activeBusinessId, async (tx) => {
     const appt = await tx.appointment.findUniqueOrThrow({ where: { id: appointmentId } });
-    const items = await tx.appointmentItem.findMany({ where: { appointmentId } });
+    const items = (await tx.appointmentItem.findMany({
+      where: { appointmentId },
+    })) as AppointmentItemRow[];
 
     const pkgItem = items.find((i) => i.kind === 'package');
     const addonItems = items.filter((i) => i.kind === 'addon');
