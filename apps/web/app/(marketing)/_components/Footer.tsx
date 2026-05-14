@@ -25,7 +25,7 @@ const COLUMNS: Array<{ title: string; links: { label: string; href: string }[] }
     title: 'Company',
     links: [
       { label: 'About', href: '/about' },
-      { label: 'Customers', href: '/customers' },
+      { label: 'Customers', href: '/customers-stories' },
       { label: 'Blog', href: '/blog' },
       { label: 'Contact', href: '/contact' },
     ],

@@ -149,7 +149,7 @@ export default function AboutPage() {
               <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
-              href="/customers"
+              href="/customers-stories"
               className="inline-flex items-center justify-center rounded-md border border-white/15 bg-white/[0.04] px-5 py-3 text-sm font-medium text-white/90 hover:bg-white/[0.08]"
             >
               See who&apos;s using Splash
