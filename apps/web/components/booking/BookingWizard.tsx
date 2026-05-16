@@ -9,10 +9,15 @@ import { StepAddons } from './StepAddons';
 import { StepCustomer } from './StepCustomer';
 import { StepPhotos } from './StepPhotos';
 import { StepReviewPay } from './StepReviewPay';
+import { BookingSuccessCard } from './BookingSuccessCard';
 import {
+  clearPersistedBookingResult,
   clearPersistedIdempotencyKey,
   initialState,
+  readPersistedBookingResult,
   resolveIdempotencyKey,
+  writePersistedBookingResult,
+  type PersistedBookingResult,
   type WizardState,
 } from './state';
 
@@ -63,6 +68,15 @@ export function BookingWizard({ business, catalog }: { business: Business; catal
     initialState(resolveIdempotencyKey(business.slug)),
   );
 
+  // If the customer already completed a booking in this session (and the
+  // entry is still within its TTL), short-circuit the wizard and render the
+  // success card directly. Phase 1: this is what prevents a refresh-after-
+  // success from minting a new idempotency key and racing the customer's
+  // own previously-committed appointment into a phantom SLOT_CONFLICT.
+  const [persistedResult, setPersistedResult] = useState<PersistedBookingResult | null>(() =>
+    readPersistedBookingResult(business.slug),
+  );
+
   const photosStepEnabled = business.features.photos;
   const steps = [
     'zone',
@@ -81,11 +95,28 @@ export function BookingWizard({ business, catalog }: { business: Business; catal
   const next = () => setStepIdx((i) => Math.min(i + 1, steps.length - 1));
   const prev = () => setStepIdx((i) => Math.max(i - 1, 0));
 
-  const onBookingSucceeded = useCallback(() => {
-    // Booking is durably committed server-side. Drop the persisted key so a
-    // subsequent visit to /book starts a brand-new attempt instead of
-    // replaying this one's idempotent response.
+  const onBookingSucceeded = useCallback(
+    (result: Omit<PersistedBookingResult, 'completedAt'>) => {
+      // Persist the success state in sessionStorage so a refresh on this
+      // page re-renders the confirmation instead of restarting the wizard.
+      writePersistedBookingResult(business.slug, result);
+      setPersistedResult({ ...result, completedAt: Date.now() });
+      // The idempotency key is intentionally NOT cleared here. A retry
+      // before the customer clicks "Book another car wash" should keep
+      // replaying the same successful response via the server's
+      // idempotent-replay path.
+    },
+    [business.slug],
+  );
+
+  const onRestart = useCallback(() => {
+    // Explicit "book another car wash". Clear both stores and reset the
+    // wizard to a fresh attempt.
+    clearPersistedBookingResult(business.slug);
     clearPersistedIdempotencyKey(business.slug);
+    setPersistedResult(null);
+    setState(initialState(resolveIdempotencyKey(business.slug)));
+    setStepIdx(0);
   }, [business.slug]);
 
   const onPickAnotherTime = useCallback(() => {
@@ -93,6 +124,27 @@ export function BookingWizard({ business, catalog }: { business: Business; catal
     if (dateTimeStepIdx >= 0) setStepIdx(dateTimeStepIdx);
   }, [dateTimeStepIdx]);
 
+  // Branch A: a recent success exists — render the standalone confirmation.
+  if (persistedResult) {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-8">
+        <header className="mb-6">
+          <h1 className="text-xl font-semibold">{business.name}</h1>
+          <p className="mt-1 text-sm text-neutral-600">Your booking is in.</p>
+        </header>
+        <BookingSuccessCard
+          business={business}
+          appointmentId={persistedResult.appointmentId}
+          depositMethod={persistedResult.depositMethod}
+          depositAmountCents={persistedResult.depositAmountCents}
+          clientSecret={null}
+          onRestart={onRestart}
+        />
+      </main>
+    );
+  }
+
+  // Branch B: standard wizard.
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <header className="mb-6">
@@ -181,6 +233,7 @@ export function BookingWizard({ business, catalog }: { business: Business; catal
           onBack={prev}
           onPickAnotherTime={onPickAnotherTime}
           onBookingSucceeded={onBookingSucceeded}
+          onRestart={onRestart}
         />
       )}
     </main>

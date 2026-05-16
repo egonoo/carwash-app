@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { humanizeBookingError, type HumanizedError } from '@/lib/booking-validation';
-import type { WizardPhoto, WizardState } from './state';
+import { BookingSuccessCard } from './BookingSuccessCard';
+import type { PersistedBookingResult, WizardPhoto, WizardState } from './state';
 
 type Business = {
   id: string;
@@ -40,6 +41,7 @@ export function StepReviewPay({
   onBack,
   onPickAnotherTime,
   onBookingSucceeded,
+  onRestart,
 }: {
   business: Business;
   state: WizardState;
@@ -50,10 +52,12 @@ export function StepReviewPay({
    *  step "datetime". */
   onPickAnotherTime?: () => void;
   /** Fired exactly once when the server returns a non-replayed success or
-   *  an idempotent replay. Wizard uses this to drop the persisted
-   *  sessionStorage idempotency key so the next /book visit starts a new
-   *  attempt instead of reusing this one. */
-  onBookingSucceeded?: () => void;
+   *  an idempotent replay. Wizard persists the result in sessionStorage so
+   *  a refresh keeps showing the confirmation. It intentionally does NOT
+   *  clear the idempotency key — that happens only on explicit restart. */
+  onBookingSucceeded?: (result: Omit<PersistedBookingResult, 'completedAt'>) => void;
+  /** "Book another car wash" — clears persisted state and resets the wizard. */
+  onRestart?: () => void;
 }) {
   const [breakdown, setBreakdown] = useState<Breakdown | null>(null);
   const [previewError, setPreviewError] = useState<HumanizedError | null>(null);
@@ -158,10 +162,16 @@ export function StepReviewPay({
         clientSecret: json.data.clientSecret,
         depositAmountCents: json.data.depositAmountCents,
       });
-      // Persistent sessionStorage key can be cleared now — the booking is
-      // durably committed and any further visits to /book should start a
-      // fresh attempt. The result card itself does not rely on the key.
-      onBookingSucceeded?.();
+      // Persist the success so a refresh / remount still shows the same
+      // confirmation instead of a fresh wizard. Idempotency key is kept
+      // until the customer explicitly restarts via "Book another".
+      onBookingSucceeded?.({
+        appointmentId,
+        depositMethod: json.data.depositMethod,
+        depositAmountCents: json.data.depositAmountCents,
+        totalCents: json.data.totalCents,
+        balanceDueOnServiceCents: json.data.balanceDueOnServiceCents,
+      });
       const valid = state.photos.filter((p) => p.status === 'ok');
       if (valid.length > 0) {
         void uploadPhotos(appointmentId, valid);
@@ -380,38 +390,15 @@ export function StepReviewPay({
                 : `Pay deposit${breakdown ? ` ${money(breakdown.depositAmountCents)}` : ''}`}
           </button>
         </div>
-      ) : result.depositMethod === 'zelle' ? (
-        <div className="card space-y-2 text-sm">
-          <p className="text-base font-semibold">Reservation created — awaiting Zelle transfer.</p>
-          <p className="text-neutral-700">
-            Send <strong>{money(result.depositAmountCents)}</strong> via Zelle to:
-          </p>
-          <ul className="ml-4 list-disc text-neutral-700">
-            <li>
-              Zelle contact: <code className="rounded bg-neutral-100 px-1 py-0.5 text-[12px]">payments@{business.slug}.splash.app</code>
-            </li>
-            <li>
-              Memo / note: <code className="rounded bg-neutral-100 px-1 py-0.5 text-[12px]">{result.appointmentId.slice(0, 8)}</code>
-            </li>
-          </ul>
-          <p className="text-xs text-neutral-500">
-            Your booking will be confirmed once {business.name} verifies the transfer.
-            If the deposit is not received within 24h, the reservation will be released.
-          </p>
-        </div>
       ) : (
-        <div className="card text-sm">
-          <p className="text-base font-semibold">Appointment created.</p>
-          <p className="mt-1 text-neutral-600">
-            Complete the payment with Stripe Elements using the client secret below.
-          </p>
-          <code className="mt-2 block break-all rounded bg-neutral-50 p-2 text-xs">
-            {result.clientSecret}
-          </code>
-          <p className="mt-2 text-xs text-neutral-500">
-            Next iteration: embed &lt;Elements /&gt; from @stripe/react-stripe-js to finalize the charge.
-          </p>
-        </div>
+        <BookingSuccessCard
+          business={business}
+          appointmentId={result.appointmentId}
+          depositMethod={result.depositMethod}
+          depositAmountCents={result.depositAmountCents}
+          clientSecret={result.clientSecret}
+          onRestart={onRestart ?? (() => {})}
+        />
       )}
 
       {result && uploads.length > 0 && (

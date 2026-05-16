@@ -134,3 +134,89 @@ export function resolveIdempotencyKey(businessSlug: string): string {
   writePersistedIdempotencyKey(businessSlug, fresh);
   return fresh;
 }
+
+/**
+ * Persisted booking-result store. Same sessionStorage pattern as the
+ * idempotency key but separately keyed so a stale success entry doesn't
+ * block a fresh attempt's key generation. Written on a successful
+ * createBookingDraft response. Read on wizard mount so a refresh on the
+ * success page still shows the confirmation instead of restarting the
+ * wizard and triggering a phantom SLOT_CONFLICT.
+ */
+const RESULT_NAMESPACE = 'splash:booking:result';
+const RESULT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+function resultStorageKey(businessSlug: string): string {
+  return `${RESULT_NAMESPACE}:${businessSlug}`;
+}
+
+export type PersistedBookingResult = {
+  appointmentId: string;
+  depositMethod: 'card' | 'zelle';
+  depositAmountCents: number;
+  totalCents: number;
+  balanceDueOnServiceCents: number;
+  /** Epoch ms; used to age the entry out after RESULT_TTL_MS. */
+  completedAt: number;
+};
+
+export function readPersistedBookingResult(businessSlug: string): PersistedBookingResult | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(resultStorageKey(businessSlug));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedBookingResult;
+    if (
+      !parsed ||
+      typeof parsed.appointmentId !== 'string' ||
+      (parsed.depositMethod !== 'card' && parsed.depositMethod !== 'zelle') ||
+      typeof parsed.depositAmountCents !== 'number' ||
+      typeof parsed.totalCents !== 'number' ||
+      typeof parsed.balanceDueOnServiceCents !== 'number' ||
+      typeof parsed.completedAt !== 'number'
+    ) {
+      return null;
+    }
+    if (Date.now() - parsed.completedAt > RESULT_TTL_MS) {
+      // Stale — drop it so a fresh wizard takes over.
+      try {
+        window.sessionStorage.removeItem(resultStorageKey(businessSlug));
+      } catch {
+        // ignore
+      }
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function writePersistedBookingResult(
+  businessSlug: string,
+  result: Omit<PersistedBookingResult, 'completedAt'> & { completedAt?: number },
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const payload: PersistedBookingResult = {
+      appointmentId: result.appointmentId,
+      depositMethod: result.depositMethod,
+      depositAmountCents: result.depositAmountCents,
+      totalCents: result.totalCents,
+      balanceDueOnServiceCents: result.balanceDueOnServiceCents,
+      completedAt: result.completedAt ?? Date.now(),
+    };
+    window.sessionStorage.setItem(resultStorageKey(businessSlug), JSON.stringify(payload));
+  } catch {
+    // ignore (quota / private mode)
+  }
+}
+
+export function clearPersistedBookingResult(businessSlug: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.removeItem(resultStorageKey(businessSlug));
+  } catch {
+    // ignore
+  }
+}
