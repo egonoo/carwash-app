@@ -14,8 +14,11 @@ export async function POST(req: NextRequest) {
     if (!rl.ok) throw errs.rateLimited();
 
     const body = await req.json();
-    const input = BookingDraftInputSchema.parse(body);
-    const result = await createBookingDraft(input);
+    const parsed = BookingDraftInputSchema.safeParse(body);
+    if (!parsed.success) {
+      throw errs.validation(parsed.error.flatten());
+    }
+    const result = await createBookingDraft(parsed.data);
 
     return NextResponse.json({
       ok: true,

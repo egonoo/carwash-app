@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { humanizeBookingError, type HumanizedError } from '@/lib/booking-validation';
 import type { WizardPhoto, WizardState } from './state';
 
 type Business = {
@@ -22,6 +23,16 @@ type DraftResult = {
 type PhotoUploadStatus = 'pending' | 'uploading' | 'done' | 'failed';
 type PhotoUploadEntry = { id: string; status: PhotoUploadStatus; errorMsg?: string };
 
+type Breakdown = {
+  subtotalCents: number;
+  discounts: Array<{ label: string; amountCents: number }>;
+  taxCents: number;
+  totalCents: number;
+  depositAmountCents: number;
+  balanceDueOnServiceCents: number;
+  loyalty?: { rewardAvailable?: boolean };
+};
+
 export function StepReviewPay({
   business,
   state,
@@ -33,8 +44,9 @@ export function StepReviewPay({
   onChange: (patch: Partial<WizardState>) => void;
   onBack: () => void;
 }) {
-  const [breakdown, setBreakdown] = useState<any>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [breakdown, setBreakdown] = useState<Breakdown | null>(null);
+  const [previewError, setPreviewError] = useState<HumanizedError | null>(null);
+  const [submitError, setSubmitError] = useState<HumanizedError | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<DraftResult | null>(null);
   const [uploads, setUploads] = useState<PhotoUploadEntry[]>([]);
@@ -42,30 +54,55 @@ export function StepReviewPay({
 
   useEffect(() => {
     if (!state.packageId || !state.vehicleTypeId) return;
-    fetch('/api/booking/price-preview', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        businessId: business.id,
-        packageId: state.packageId,
-        vehicleTypeId: state.vehicleTypeId,
-        zoneId: state.zoneId ?? undefined,
-        addons: state.addons,
-        customerEmail: state.customer.email,
-        promoCode: state.promoCode,
-      }),
-    })
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.ok) setBreakdown(j.data);
-        else setErr(j.message);
-      });
-  }, [business.id, state.packageId, state.vehicleTypeId, state.zoneId, state.addons, state.customer.email, state.promoCode]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/booking/price-preview', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            businessId: business.id,
+            packageId: state.packageId,
+            vehicleTypeId: state.vehicleTypeId,
+            zoneId: state.zoneId ?? undefined,
+            addons: state.addons,
+            customerEmail: state.customer.email,
+            promoCode: state.promoCode,
+          }),
+        });
+        const json = await res.json();
+        if (cancelled) return;
+        if (json.ok) {
+          setBreakdown(json.data as Breakdown);
+          setPreviewError(null);
+        } else {
+          setPreviewError(humanizeBookingError(json));
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setPreviewError(humanizeBookingError(err));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    business.id,
+    state.packageId,
+    state.vehicleTypeId,
+    state.zoneId,
+    state.addons,
+    state.customer.email,
+    state.promoCode,
+  ]);
+
+  const consentMissing = !state.evidenceConsent.currentStateAccepted;
+  const submitDisabled = submitting || consentMissing || !breakdown;
 
   async function submit() {
     if (!state.zoneId || !state.startsAtISO || !state.vehicleTypeId || !state.packageId) return;
     setSubmitting(true);
-    setErr(null);
+    setSubmitError(null);
     try {
       const res = await fetch('/api/booking/draft', {
         method: 'POST',
@@ -99,7 +136,10 @@ export function StepReviewPay({
         }),
       });
       const json = await res.json();
-      if (!json.ok) throw new Error(json.message ?? 'Error creating booking');
+      if (!json.ok) {
+        setSubmitError(humanizeBookingError(json));
+        return;
+      }
       const appointmentId: string = json.data.appointmentId;
       setResult({
         appointmentId,
@@ -107,13 +147,12 @@ export function StepReviewPay({
         clientSecret: json.data.clientSecret,
         depositAmountCents: json.data.depositAmountCents,
       });
-      // Subir fotos válidas en paralelo. Fallos no revierten el booking.
       const valid = state.photos.filter((p) => p.status === 'ok');
       if (valid.length > 0) {
         void uploadPhotos(appointmentId, valid);
       }
-    } catch (e) {
-      setErr((e as Error).message);
+    } catch (err) {
+      setSubmitError(humanizeBookingError(err));
     } finally {
       setSubmitting(false);
     }
@@ -183,72 +222,79 @@ export function StepReviewPay({
     );
   }
 
+  const formattedDate = useMemo(() => formatDate(state.startsAtISO, business.timezone), [state.startsAtISO, business.timezone]);
+  const vehicleSummary = useMemo(() => formatVehicleLine(state.vehicle), [state.vehicle]);
+  const addressSummary = useMemo(() => formatAddress(state.customer), [state.customer]);
+
   return (
-    <section className="space-y-4">
-      <h2 className="text-xl font-semibold">Review and pay deposit</h2>
+    <section className="space-y-5">
+      <header>
+        <h2 className="text-xl font-semibold">Review and pay deposit</h2>
+        <p className="mt-1 text-sm text-neutral-600">One last check before we hold your time slot.</p>
+      </header>
 
-      {state.detectedZone && (
-        <div className="card text-sm">
-          <div>
-            Service area: <strong>{state.detectedZone.name}</strong>
-            {state.detectedZone.matchedBy === 'fallback' && (
-              <span className="ml-1 text-xs text-neutral-500">(default)</span>
-            )}
-          </div>
-          {state.detectedZone.extraFeeCents > 0 && (
-            <div className="mt-1 text-neutral-700">
-              Extra service area fee: ${(state.detectedZone.extraFeeCents / 100).toFixed(2)}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Summary */}
+      <div className="card divide-y divide-neutral-200/70 p-0">
+        <SummaryRow label="When" value={formattedDate ?? 'Pick a time'} />
+        <SummaryRow
+          label="Where"
+          value={state.detectedZone?.name ?? '—'}
+          sub={addressSummary || undefined}
+        />
+        <SummaryRow label="Vehicle" value={vehicleSummary} />
+        <SummaryRow
+          label="Contact"
+          value={`${(state.customer.firstName ?? '').trim()} ${(state.customer.lastName ?? '').trim()}`.trim() || '—'}
+          sub={[state.customer.email, state.customer.phone].filter(Boolean).join(' · ') || undefined}
+        />
+      </div>
 
-      {breakdown && (
+      {/* Price */}
+      {previewError ? (
+        <ErrorBanner error={previewError} />
+      ) : breakdown ? (
         <div className="card space-y-2 text-sm">
-          <Row label="Subtotal" value={`$${(breakdown.subtotalCents / 100).toFixed(2)}`} />
-          {breakdown.discounts.map((d: any, i: number) => (
-            <Row
-              key={i}
-              label={d.label}
-              value={`−$${(d.amountCents / 100).toFixed(2)}`}
-              tone="accent"
-            />
+          <Row label="Subtotal" value={money(breakdown.subtotalCents)} />
+          {breakdown.discounts.map((d, i) => (
+            <Row key={i} label={d.label} value={`−${money(d.amountCents)}`} tone="accent" />
           ))}
-          {breakdown.taxCents > 0 && (
-            <Row label="Tax" value={`$${(breakdown.taxCents / 100).toFixed(2)}`} />
-          )}
-          <Row label="Total" value={`$${(breakdown.totalCents / 100).toFixed(2)}`} strong />
-          <hr className="my-2" />
-          <Row
-            label="Deposit today"
-            value={`$${(breakdown.depositAmountCents / 100).toFixed(2)}`}
-            strong
-          />
+          {breakdown.taxCents > 0 && <Row label="Tax" value={money(breakdown.taxCents)} />}
+          <div className="my-2 h-px bg-neutral-200/70" />
+          <Row label="Total" value={money(breakdown.totalCents)} strong />
+          <Row label="Deposit today" value={money(breakdown.depositAmountCents)} strong tone="brand" />
           <Row
             label="Balance on service"
-            value={`$${(breakdown.balanceDueOnServiceCents / 100).toFixed(2)}`}
+            value={money(breakdown.balanceDueOnServiceCents)}
+            muted
           />
           {breakdown.loyalty?.rewardAvailable && (
-            <div className="mt-2 rounded bg-accent/10 p-2 text-xs text-accent">
-              🎉 Loyalty reward applied automatically.
+            <div className="mt-3 flex items-start gap-2 rounded-md bg-accent/10 px-3 py-2 text-xs text-accent">
+              <span aria-hidden>🎉</span>
+              <span>A loyalty reward has been applied to this booking automatically.</span>
             </div>
           )}
         </div>
+      ) : (
+        <div className="card text-sm text-neutral-500">Calculating your total…</div>
       )}
 
+      {/* Deposit method */}
       {!result && (
         <div className="card">
           <div className="text-sm font-semibold">Deposit method</div>
+          <p className="mt-1 text-xs text-neutral-500">
+            The deposit secures your time slot. The balance is paid on the day of service.
+          </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <MethodRadio
               label="Credit / debit card"
-              sublabel="Charged now via secure checkout"
+              sublabel="Charged now via Stripe"
               checked={state.depositMethod === 'card'}
               onChange={() => onChange({ depositMethod: 'card' })}
             />
             <MethodRadio
               label="Zelle"
-              sublabel="Transfer manually, admin confirms"
+              sublabel="Send manually, we confirm"
               checked={state.depositMethod === 'zelle'}
               onChange={() => onChange({ depositMethod: 'zelle' })}
             />
@@ -256,31 +302,69 @@ export function StepReviewPay({
         </div>
       )}
 
-      {err && <div className="text-sm text-danger">{err}</div>}
+      {/*
+        Condition consent fallback. If the photos step is enabled this was
+        already collected and gated there. If photos are disabled, surface it
+        here so the strict server-side z.literal(true) check still passes.
+      */}
+      {!result && !business.features.photos && (
+        <div className="card text-sm">
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4"
+              checked={state.evidenceConsent.currentStateAccepted}
+              onChange={(e) =>
+                onChange({
+                  evidenceConsent: {
+                    ...state.evidenceConsent,
+                    currentStateAccepted: e.target.checked,
+                  },
+                })
+              }
+            />
+            <span>
+              <strong>I confirm my vehicle is in the condition described</strong>{' '}
+              and accept that the {business.name} team will document any pre-existing
+              damage on arrival (required).
+            </span>
+          </label>
+        </div>
+      )}
+
+      {submitError && <ErrorBanner error={submitError} />}
 
       {!result ? (
-        <div className="flex justify-between">
-          <button className="btn-ghost" onClick={onBack}>Back</button>
-          <button className="btn-primary" onClick={submit} disabled={submitting}>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <button type="button" className="btn-ghost" onClick={onBack} disabled={submitting}>
+            Back
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={submit}
+            disabled={submitDisabled}
+            aria-disabled={submitDisabled}
+          >
             {submitting
               ? 'Processing…'
               : state.depositMethod === 'zelle'
-                ? `Reserve (Zelle) ${breakdown ? `$${(breakdown.depositAmountCents / 100).toFixed(2)}` : ''}`
-                : `Pay deposit ${breakdown ? `$${(breakdown.depositAmountCents / 100).toFixed(2)}` : ''}`}
+                ? `Reserve with Zelle${breakdown ? ` — ${money(breakdown.depositAmountCents)}` : ''}`
+                : `Pay deposit${breakdown ? ` ${money(breakdown.depositAmountCents)}` : ''}`}
           </button>
         </div>
       ) : result.depositMethod === 'zelle' ? (
         <div className="card space-y-2 text-sm">
-          <p className="font-semibold">Reservation created — awaiting Zelle transfer.</p>
+          <p className="text-base font-semibold">Reservation created — awaiting Zelle transfer.</p>
           <p className="text-neutral-700">
-            Send <strong>${(result.depositAmountCents / 100).toFixed(2)}</strong> via Zelle to:
+            Send <strong>{money(result.depositAmountCents)}</strong> via Zelle to:
           </p>
-          <ul className="list-disc pl-5 text-neutral-700">
+          <ul className="ml-4 list-disc text-neutral-700">
             <li>
-              Zelle contact: <code>payments@{business.slug}.splash.app</code>
+              Zelle contact: <code className="rounded bg-neutral-100 px-1 py-0.5 text-[12px]">payments@{business.slug}.splash.app</code>
             </li>
             <li>
-              Memo / note: <code>{result.appointmentId.slice(0, 8)}</code>
+              Memo / note: <code className="rounded bg-neutral-100 px-1 py-0.5 text-[12px]">{result.appointmentId.slice(0, 8)}</code>
             </li>
           </ul>
           <p className="text-xs text-neutral-500">
@@ -290,9 +374,9 @@ export function StepReviewPay({
         </div>
       ) : (
         <div className="card text-sm">
-          <p className="font-semibold">Appointment created.</p>
+          <p className="text-base font-semibold">Appointment created.</p>
           <p className="mt-1 text-neutral-600">
-            Complete the payment with Stripe Elements using client secret:
+            Complete the payment with Stripe Elements using the client secret below.
           </p>
           <code className="mt-2 block break-all rounded bg-neutral-50 p-2 text-xs">
             {result.clientSecret}
@@ -304,13 +388,50 @@ export function StepReviewPay({
       )}
 
       {result && uploads.length > 0 && (
-        <UploadsPanel
-          uploads={uploads}
-          uploading={uploading}
-          onRetry={retryFailedUploads}
-        />
+        <UploadsPanel uploads={uploads} uploading={uploading} onRetry={retryFailedUploads} />
       )}
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function ErrorBanner({ error }: { error: HumanizedError }) {
+  return (
+    <div
+      role="alert"
+      className="rounded-lg border border-danger/30 bg-danger/[0.06] p-3 text-sm text-danger"
+    >
+      <div className="font-semibold">{error.title}</div>
+      <p className="mt-0.5 text-danger/90">{error.message}</p>
+      {error.fieldHints.length > 0 && (
+        <ul className="mt-2 list-disc pl-5 text-[13px] text-danger/90">
+          {error.fieldHints.map((h, i) => (
+            <li key={i}>{h}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-4 py-3 text-sm">
+      <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</span>
+      <span className="min-w-0 text-right">
+        <span className="block truncate font-medium text-neutral-900">{value || '—'}</span>
+        {sub && <span className="mt-0.5 block text-xs text-neutral-500">{sub}</span>}
+      </span>
+    </div>
   );
 }
 
@@ -379,8 +500,11 @@ function MethodRadio({
     <button
       type="button"
       onClick={onChange}
-      className={`rounded border p-3 text-left transition ${
-        checked ? 'border-[color:var(--brand)] bg-[color:var(--brand)]/5 ring-1 ring-[color:var(--brand)]' : 'hover:bg-neutral-50'
+      aria-pressed={checked}
+      className={`rounded-md border p-3 text-left transition ${
+        checked
+          ? 'border-[color:var(--brand)] bg-[color:var(--brand)]/5 ring-1 ring-[color:var(--brand)]'
+          : 'border-neutral-200 hover:bg-neutral-50'
       }`}
     >
       <div className="font-medium">{label}</div>
@@ -394,20 +518,65 @@ function Row({
   value,
   tone,
   strong,
+  muted,
 }: {
   label: string;
   value: string;
-  tone?: 'accent';
+  tone?: 'accent' | 'brand';
   strong?: boolean;
+  muted?: boolean;
 }) {
+  const toneClass =
+    tone === 'accent' ? 'text-accent' : tone === 'brand' ? 'text-[color:var(--brand-ink)]' : '';
   return (
     <div
-      className={`flex justify-between ${tone === 'accent' ? 'text-accent' : ''} ${
-        strong ? 'font-semibold' : ''
-      }`}
+      className={`flex justify-between ${toneClass} ${strong ? 'font-semibold' : ''} ${muted ? 'text-neutral-500' : ''}`}
     >
       <span>{label}</span>
       <span>{value}</span>
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+
+function money(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function formatDate(iso: string | null, timeZone: string): string | null {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(d);
+  } catch {
+    return iso;
+  }
+}
+
+function formatVehicleLine(v: WizardState['vehicle']): string {
+  const parts = [v.year?.toString(), v.make, v.model].filter(Boolean) as string[];
+  const head = parts.join(' ');
+  const tail = [v.color, v.plate && `plate ${v.plate}${v.plateState ? ` · ${v.plateState}` : ''}`]
+    .filter(Boolean)
+    .join(' · ');
+  return [head, tail].filter(Boolean).join(' — ') || '—';
+}
+
+function formatAddress(c: WizardState['customer']): string {
+  const line1 = c.addressLine1?.trim() ?? '';
+  const line2 = c.addressLine2?.trim() ?? '';
+  const city = c.addressCity?.trim() ?? '';
+  const stateCode = c.addressState?.trim() ?? '';
+  const zip = c.addressZip?.trim() ?? '';
+  const street = [line1, line2].filter(Boolean).join(' ');
+  const tail = [city, stateCode].filter(Boolean).join(', ');
+  return [street, tail, zip].filter(Boolean).join(' · ');
 }
