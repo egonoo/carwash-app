@@ -20,6 +20,7 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
+import { UserMenu } from './UserMenu';
 
 type NavItem = {
   href: string;
@@ -41,12 +42,21 @@ const ITEMS: NavItem[] = [
   { href: '/payments', label: 'Payments', icon: Wallet },
 ];
 
+export type SidebarUser = {
+  fullName: string | null;
+  email: string;
+  role: 'owner' | 'admin' | 'staff' | 'readonly';
+  isSuperAdmin: boolean;
+};
+
 export function Sidebar({
   businessName,
   loyaltyEnabled,
+  user,
 }: {
   businessName: string;
   loyaltyEnabled: boolean;
+  user: SidebarUser;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -122,8 +132,14 @@ export function Sidebar({
             })}
           </nav>
 
-          <div className="border-t border-white/[0.06] px-4 py-3">
-            <div className="flex items-center gap-2 text-[11px] text-white/40">
+          <div className="border-t border-white/[0.06] px-3 py-3">
+            <UserMenu
+              fullName={user.fullName}
+              email={user.email}
+              role={user.role}
+              isSuperAdmin={user.isSuperAdmin}
+            />
+            <div className="mt-2 flex items-center gap-2 px-1 text-[11px] text-white/40">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
               All systems operational
             </div>

@@ -8,11 +8,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const business = await prisma.business.findUnique({
-    where: { id: session.activeBusinessId },
-    select: { name: true, slug: true, features: true },
-  });
-  if (!business) redirect('/login');
+  const [business, user] = await Promise.all([
+    prisma.business.findUnique({
+      where: { id: session.activeBusinessId },
+      select: { name: true, slug: true, features: true },
+    }),
+    prisma.appUser.findUnique({
+      where: { id: session.userId },
+      select: { email: true, fullName: true },
+    }),
+  ]);
+  if (!business || !user) redirect('/login');
 
   const features = business.features as Record<string, boolean>;
 
@@ -21,6 +27,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <Sidebar
         businessName={business.name}
         loyaltyEnabled={Boolean(features.loyalty)}
+        user={{
+          fullName: user.fullName,
+          email: user.email,
+          role: session.role,
+          isSuperAdmin: session.isSuperAdmin,
+        }}
       />
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
         {children}
