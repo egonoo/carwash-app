@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 // Mirror of the Prisma AppointmentStatus enum. Defined locally so the build
@@ -199,6 +200,38 @@ type AppointmentItemRow = {
   unitPriceCents: number;
   durationMinutes: number;
 };
+
+/**
+ * Admin convenience wrapper for the most common transition into `cancelled`.
+ * Used by the appointment detail page's "Cancel appointment" button so the
+ * client doesn't have to wire the enum value itself. Same authorisation,
+ * same TRANSITIONS table, same audit log — adds path revalidation so the
+ * appointments list, today view and the appointment detail itself reflect
+ * the cancellation immediately. `awaiting_zelle` and `pending_deposit`
+ * rows that block availability disappear from `enumerateDaySlots` /
+ * `computeAvailability` as soon as their status flips, so this is also
+ * the safe way to free a slot held by a test booking.
+ */
+const CancelAppointmentSchema = z.object({
+  appointmentId: z.string().uuid(),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export async function cancelAppointment(
+  input: z.infer<typeof CancelAppointmentSchema>,
+): Promise<{ ok: true }> {
+  const parsed = CancelAppointmentSchema.parse(input);
+  await updateAppointmentStatus({
+    appointmentId: parsed.appointmentId,
+    newStatus: 'cancelled',
+    reason: parsed.reason,
+  });
+  revalidatePath(`/appointments/${parsed.appointmentId}`);
+  revalidatePath('/appointments');
+  revalidatePath('/today');
+  revalidatePath('/schedule');
+  return { ok: true as const };
+}
 
 export async function recomputePricingForAppointment(
   appointmentId: string,

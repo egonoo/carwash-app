@@ -8,6 +8,7 @@ import { ItemsEditor } from './ItemsEditor';
 import { DepositMethodPicker } from './DepositMethodPicker';
 import { PhotoUploader } from './PhotoUploader';
 import { BookingPhotoGallery } from '../../bookings/BookingPhotoGallery';
+import { CancelAppointmentButton } from './CancelAppointmentButton';
 
 export default async function AppointmentDetailPage({
   params,
@@ -300,6 +301,21 @@ export default async function AppointmentDetailPage({
             balanceMethod={appt.balanceMethod}
             balanceDueCents={appt.balanceDueCents}
           />
+        </div>
+      </section>
+
+      <section className="card">
+        <h2 className="text-lg font-semibold">Cleanup</h2>
+        <div className="mt-3">
+          <CancelAppointmentButton
+            appointmentId={appt.id}
+            status={appt.status}
+          />
+          {!['draft', 'pending_deposit', 'awaiting_zelle', 'confirmed', 'on_the_way', 'arrived', 'in_progress'].includes(appt.status) && (
+            <p className="text-xs text-neutral-500">
+              This appointment is in a terminal state ({appt.status}). No cleanup actions available.
+            </p>
+          )}
         </div>
       </section>
 

@@ -1,11 +1,20 @@
+import Link from 'next/link';
 import { requireSession } from '@/lib/auth';
 import { withTenant } from '@/lib/rls';
+import { CustomerRowActions } from './CustomerRowActions';
 
-export default async function CustomersPage() {
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const { view } = await searchParams;
+  const showArchived = view === 'archived';
   const session = await requireSession();
 
   const customers = await withTenant(session.activeBusinessId, (tx) =>
     tx.customer.findMany({
+      where: showArchived ? { deletedAt: { not: null } } : { deletedAt: null },
       orderBy: { createdAt: 'desc' },
       take: 100,
       select: {
@@ -15,19 +24,44 @@ export default async function CustomersPage() {
         email: true,
         phoneE164: true,
         createdAt: true,
+        deletedAt: true,
       },
     }),
   );
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Customers</h1>
-      <p className="mt-1 text-sm text-neutral-600">Latest 100 customers.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Customers</h1>
+        <div className="flex items-center gap-2 text-xs">
+          <Link
+            href="/customers"
+            className={`rounded-md px-3 py-1.5 ${
+              !showArchived ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+            }`}
+          >
+            Active
+          </Link>
+          <Link
+            href={{ pathname: '/customers', query: { view: 'archived' } }}
+            className={`rounded-md px-3 py-1.5 ${
+              showArchived ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+            }`}
+          >
+            Archived
+          </Link>
+        </div>
+      </div>
+      <p className="mt-1 text-sm text-neutral-600">
+        {showArchived
+          ? 'Latest 100 archived customers. Restore to send them back to the active list.'
+          : 'Latest 100 active customers. Archive hides a customer from this list and from booking suggestions; their appointments, payments and photo history are kept.'}
+      </p>
 
       <div className="mt-6 overflow-x-auto">
         {customers.length === 0 ? (
           <div className="rounded border border-dashed p-6 text-center text-sm text-neutral-500">
-            No customers yet.
+            {showArchived ? 'No archived customers.' : 'No customers yet.'}
           </div>
         ) : (
           <table className="min-w-full text-sm">
@@ -37,6 +71,7 @@ export default async function CustomersPage() {
                 <th className="px-3 py-2">Email</th>
                 <th className="px-3 py-2">Phone</th>
                 <th className="px-3 py-2">Created</th>
+                <th className="px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -49,6 +84,12 @@ export default async function CustomersPage() {
                   <td className="px-3 py-2">{c.phoneE164}</td>
                   <td className="px-3 py-2 text-neutral-500">
                     {new Date(c.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <CustomerRowActions
+                      customerId={c.id}
+                      archived={!!c.deletedAt}
+                    />
                   </td>
                 </tr>
               ))}
