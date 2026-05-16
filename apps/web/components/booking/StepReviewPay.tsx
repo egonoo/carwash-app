@@ -38,11 +38,22 @@ export function StepReviewPay({
   state,
   onChange,
   onBack,
+  onPickAnotherTime,
+  onBookingSucceeded,
 }: {
   business: Business;
   state: WizardState;
   onChange: (patch: Partial<WizardState>) => void;
   onBack: () => void;
+  /** Called when the customer wants to bounce back to the date/time step
+   *  after a SLOT_CONFLICT. Wizard clears state.startsAtISO and jumps to
+   *  step "datetime". */
+  onPickAnotherTime?: () => void;
+  /** Fired exactly once when the server returns a non-replayed success or
+   *  an idempotent replay. Wizard uses this to drop the persisted
+   *  sessionStorage idempotency key so the next /book visit starts a new
+   *  attempt instead of reusing this one. */
+  onBookingSucceeded?: () => void;
 }) {
   const [breakdown, setBreakdown] = useState<Breakdown | null>(null);
   const [previewError, setPreviewError] = useState<HumanizedError | null>(null);
@@ -147,6 +158,10 @@ export function StepReviewPay({
         clientSecret: json.data.clientSecret,
         depositAmountCents: json.data.depositAmountCents,
       });
+      // Persistent sessionStorage key can be cleared now — the booking is
+      // durably committed and any further visits to /book should start a
+      // fresh attempt. The result card itself does not rely on the key.
+      onBookingSucceeded?.();
       const valid = state.photos.filter((p) => p.status === 'ok');
       if (valid.length > 0) {
         void uploadPhotos(appointmentId, valid);
@@ -332,7 +347,19 @@ export function StepReviewPay({
         </div>
       )}
 
-      {submitError && <ErrorBanner error={submitError} />}
+      {submitError && (
+        <ErrorBanner
+          error={submitError}
+          action={
+            submitError.code === 'SLOT_CONFLICT' && onPickAnotherTime
+              ? {
+                  label: 'Pick another time',
+                  onClick: onPickAnotherTime,
+                }
+              : undefined
+          }
+        />
+      )}
 
       {!result ? (
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -396,7 +423,13 @@ export function StepReviewPay({
 
 // ---------------------------------------------------------------------------
 
-function ErrorBanner({ error }: { error: HumanizedError }) {
+function ErrorBanner({
+  error,
+  action,
+}: {
+  error: HumanizedError;
+  action?: { label: string; onClick: () => void };
+}) {
   return (
     <div
       role="alert"
@@ -410,6 +443,15 @@ function ErrorBanner({ error }: { error: HumanizedError }) {
             <li key={i}>{h}</li>
           ))}
         </ul>
+      )}
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="mt-3 inline-flex items-center rounded-md border border-danger/40 bg-white px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/[0.08]"
+        >
+          {action.label}
+        </button>
       )}
     </div>
   );

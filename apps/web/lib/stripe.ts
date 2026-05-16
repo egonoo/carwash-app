@@ -62,6 +62,34 @@ export async function createDepositIntent(args: {
   return intent;
 }
 
+/**
+ * Fetch an existing deposit PaymentIntent — used to return the original
+ * `client_secret` on an idempotent booking retry so the customer can finish
+ * a card payment they already started. With Stripe Connect destination
+ * charges the PI lives on the platform account, so no stripeAccount header
+ * is needed. In dev (DEV_SKIP_STRIPE=1) we synthesize the same shape the
+ * create helper produces so the booking flow is testable offline.
+ */
+export async function retrieveDepositIntent(args: {
+  paymentIntentId: string;
+  appointmentId: string;
+  amountCents: number;
+  currency: string;
+}) {
+  if (process.env.DEV_SKIP_STRIPE === '1') {
+    const id = args.paymentIntentId;
+    return {
+      id,
+      client_secret: `${id}_secret_dev`,
+      amount: args.amountCents,
+      currency: args.currency.toLowerCase(),
+      status: 'requires_payment_method',
+    } as unknown as Stripe.PaymentIntent;
+  }
+  const stripe = getStripe();
+  return stripe.paymentIntents.retrieve(args.paymentIntentId);
+}
+
 export async function createRefund(args: {
   paymentIntentId: string;
   amountCents: number;

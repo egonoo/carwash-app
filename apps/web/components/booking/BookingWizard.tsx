@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { StepZone } from './StepZone';
 import { StepDateTime } from './StepDateTime';
 import { StepVehicle } from './StepVehicle';
@@ -9,7 +9,12 @@ import { StepAddons } from './StepAddons';
 import { StepCustomer } from './StepCustomer';
 import { StepPhotos } from './StepPhotos';
 import { StepReviewPay } from './StepReviewPay';
-import { type WizardState, initialState } from './state';
+import {
+  clearPersistedIdempotencyKey,
+  initialState,
+  resolveIdempotencyKey,
+  type WizardState,
+} from './state';
 
 type Business = {
   id: string;
@@ -54,7 +59,9 @@ type Catalog = {
  *   8. Review & pay
  */
 export function BookingWizard({ business, catalog }: { business: Business; catalog: Catalog }) {
-  const [state, setState] = useState<WizardState>(() => initialState());
+  const [state, setState] = useState<WizardState>(() =>
+    initialState(resolveIdempotencyKey(business.slug)),
+  );
 
   const photosStepEnabled = business.features.photos;
   const steps = [
@@ -69,9 +76,22 @@ export function BookingWizard({ business, catalog }: { business: Business; catal
   ] as const;
   const [stepIdx, setStepIdx] = useState(0);
   const step = steps[stepIdx]!;
+  const dateTimeStepIdx = steps.indexOf('datetime');
 
   const next = () => setStepIdx((i) => Math.min(i + 1, steps.length - 1));
   const prev = () => setStepIdx((i) => Math.max(i - 1, 0));
+
+  const onBookingSucceeded = useCallback(() => {
+    // Booking is durably committed server-side. Drop the persisted key so a
+    // subsequent visit to /book starts a brand-new attempt instead of
+    // replaying this one's idempotent response.
+    clearPersistedIdempotencyKey(business.slug);
+  }, [business.slug]);
+
+  const onPickAnotherTime = useCallback(() => {
+    setState((s) => ({ ...s, startsAtISO: null }));
+    if (dateTimeStepIdx >= 0) setStepIdx(dateTimeStepIdx);
+  }, [dateTimeStepIdx]);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -159,6 +179,8 @@ export function BookingWizard({ business, catalog }: { business: Business; catal
           state={state}
           onChange={(patch) => setState({ ...state, ...patch })}
           onBack={prev}
+          onPickAnotherTime={onPickAnotherTime}
+          onBookingSucceeded={onBookingSucceeded}
         />
       )}
     </main>

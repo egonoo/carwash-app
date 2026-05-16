@@ -194,7 +194,7 @@ export function humanizeBookingError(input: unknown): HumanizedError {
       return {
         title: 'Payment could not start',
         message:
-          errorMsg && errorMsg.length < 240
+          errorMsg && errorMsg.length < 240 && !looksLikeInfrastructureMessage(errorMsg)
             ? errorMsg
             : 'Your card processor returned an error. Please try a different card or try again shortly.',
         fieldHints: [],
@@ -224,10 +224,36 @@ export function humanizeBookingError(input: unknown): HumanizedError {
       };
   }
 
-  return {
-    ...GENERIC,
-    message: errorMsg && errorMsg.length < 240 && !errorMsg.startsWith('[') ? errorMsg : GENERIC.message,
-  };
+  // INTERNAL (and any unrecognized code): never pass server messages through
+  // verbatim. Prisma errors, Postgres errors, and stray Error.message strings
+  // from third-party libraries can all surface as INTERNAL — they are
+  // technical, sometimes contain table/column names, and confuse customers.
+  // The friendly default is always safer.
+  return { ...GENERIC, code };
+}
+
+/**
+ * Return true if a server-provided string looks like raw infrastructure
+ * output (Prisma, Postgres, Stripe SDK) that should never be shown to a
+ * customer. Used as a defense-in-depth filter alongside the
+ * code-driven path above. Exported for tests.
+ */
+export function looksLikeInfrastructureMessage(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return (
+    m.includes('prisma') ||
+    m.includes('unique constraint') ||
+    m.includes('foreign key constraint') ||
+    m.includes('violates check constraint') ||
+    m.includes('relation ') ||
+    m.includes('column ') ||
+    m.includes('postgres') ||
+    m.includes('postgresql') ||
+    m.includes('query engine') ||
+    m.includes('argument ') ||
+    m.startsWith('[') ||
+    m.startsWith('{')
+  );
 }
 
 // ---------------------------------------------------------------------------
